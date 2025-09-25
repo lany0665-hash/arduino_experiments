@@ -12,28 +12,29 @@ body {
     padding: 30px; 
     border-radius: 10px; 
     box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
-    width: 95%; /* 너비를 넓힘 */
-    max-width: 1600px; /* 최대 너비를 넓힘 */
+    width: 95%;
+    max-width: 1600px; 
     margin-bottom: 20px; 
 }
+/* 링크 스타일 추가 */
+.project-list { list-style: none; padding: 0; }
+.project-list li { margin: 15px 0; }
+.project-list a { text-decoration: none; font-size: 1.5em; color: #007BFF; }
+.project-list a:hover { text-decoration: underline; }
 
-/* --- 🔻 핵심 레이아웃 스타일 🔻 --- */
 .main-layout {
-    display: flex; /* 자식 요소들을 가로로 배치 */
-    gap: 20px;     /* 두 열 사이의 간격 */
+    display: flex;
+    gap: 20px;
     margin-top: 20px;
 }
 .content-column {
-    flex: 1; /* 두 열이 공간을 1:1 비율로 나눠가짐 */
-    min-width: 0; /* flex item이 줄어들 때 내용이 깨지는 것을 방지 */
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
 }
-/* --- 🔺 핵심 레이아웃 스타일 🔺 --- */
 
-.connection-section { 
-    border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center; 
-}
+.connection-section { border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center; }
 .connection-section h3 { margin-top: 0; }
 .button-group { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: center;}
 button, select { padding: 10px; font-size: 1em; border-radius: 5px; border: 1px solid #ccc; }
@@ -50,14 +51,12 @@ button:disabled { background-color: #ccc; cursor: not-allowed; }
 #equation, #r2_value { color: #DC3545; font-size: 1.1em; }
 .fit-result { min-height: 50px; }
 
-/* --- 🔻 테이블 스크롤 스타일 🔻 --- */
 .table-container { 
-    flex-grow: 1; /* 남는 공간을 모두 차지하도록 설정 */
-    overflow-y: auto;  /* 내용이 넘치면 세로 스크롤바 자동 생성 */
+    flex-grow: 1;
+    overflow-y: auto;
     border: 1px solid #ccc;
-    min-height: 0; /* flexbox 내부에서 스크롤이 되게 하기 위한 중요 속성 */
+    min-height: 0;
 }
-/* --- 🔺 테이블 스크롤 스타일 🔺 --- */
 
 table { border-collapse: collapse; width: 100%; text-align: center; }
 th, td { border: 1px solid #ddd; padding: 8px; font-size: 0.9em; }
