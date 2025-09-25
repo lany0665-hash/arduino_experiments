@@ -23,9 +23,15 @@
 
         <div class="connection-section">
             <h3>연결 방식 선택</h3>
-            <button id="simulationButton" class="sim-button">1. 가상 센서로 테스트</button>
+            <button id="collisionSimButton" class="sim-button">1. 자동차 충돌 시뮬레이션 시작</button>
             <hr>
             <button id="connectBleButton" class="ble-button">1. 아두이노(BLE) 연결</button>
+        </div>
+
+        <div class="simulation-area">
+            <div class="car" id="simCar">CAR</div>
+            <div class="explosion" id="simExplosion"></div>
+            <div class="wall"></div>
         </div>
 
         <div class="button-group">
@@ -89,7 +95,7 @@
     <script>
         // --- 1. UI 요소 및 전역 변수 선언 ---
         const connectBleButton = document.getElementById('connectBleButton');
-        const simulationButton = document.getElementById('simulationButton');
+        const collisionSimButton = document.getElementById('collisionSimButton'); // 새롭게 추가
         const recordButton = document.getElementById('recordButton');
         const downloadButton = document.getElementById('downloadButton');
         const fitButton = document.getElementById('fitButton');
@@ -106,10 +112,14 @@
         const rangeSlider = document.getElementById('range-slider');
         const rangeValue = document.getElementById('range-value');
 
+        // 애니메이션 관련 요소 추가
+        const simCar = document.getElementById('simCar');
+        const simExplosion = document.getElementById('simExplosion');
+
         let recordedData = []; 
         let isRecording = false;
-        let simulationInterval;
-        let samplingIntervalMs = 1000;
+        let collisionSimulationInterval; // 시뮬레이션 인터벌 변수
+        let samplingIntervalMs = 100; // 시뮬레이션은 좀 더 빠르게 데이터를 생성
         let lastSampleTime = 0;
         let myChart;
         let lastGraphUpdateTime = 0;
@@ -137,8 +147,46 @@
         });
 
         // --- 3. 이벤트 리스너 연결 ---
-        simulationButton.addEventListener('click', () => { statusSpan.textContent = "가상 센서 연결됨"; connectBleButton.disabled = true; simulationButton.disabled = true; recordButton.disabled = false; let simCounter = 0; simulationInterval = setInterval(() => { const x = Math.sin(simCounter * 0.1) * 10 + Math.random(); const y = Math.cos(simCounter * 0.1) * 10 + Math.random(); const z = 5 + (Math.random() - 0.5) * 2; simCounter++; onDataReceived(x, y, z); }, 10); });
-        connectBleButton.addEventListener('click', async () => { try { const device = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'Sensor-' }], optionalServices: [UART_SERVICE_UUID] }); statusSpan.textContent = `연결 중: ${device.name}`; const server = await device.gatt.connect(); const service = await server.getPrimaryService(UART_SERVICE_UUID); const characteristic = await server.getCharacteristic(UART_TX_CHAR_UUID); await characteristic.startNotifications(); characteristic.addEventListener('characteristicvaluechanged', handleBleNotifications); statusSpan.textContent = `연결됨: ${device.name}`; connectBleButton.disabled = true; simulationButton.disabled = true; recordButton.disabled = false; } catch (error) { console.error('BLE 연결 실패:', error); statusSpan.textContent = 'BLE 연결 실패'; } });
+
+        // 가상 충돌 시뮬레이션 버튼 이벤트
+        collisionSimButton.addEventListener('click', () => {
+            statusSpan.textContent = "자동차 충돌 시뮬레이션 시작";
+            connectBleButton.disabled = true;
+            collisionSimButton.disabled = true;
+            recordButton.disabled = false;
+            
+            // 시뮬레이션 시작
+            startCollisionSimulation();
+        });
+
+        connectBleButton.addEventListener('click', async () => { 
+            // BLE 연결 시뮬레이션 중지
+            if (collisionSimulationInterval) {
+                clearInterval(collisionSimulationInterval);
+                simCar.style.transform = `translateX(0px)`; // 자동차 초기 위치로
+                simExplosion.classList.remove('active');
+                statusSpan.textContent = 'BLE 연결 대기';
+            }
+            // 기존 BLE 연결 로직
+            try { 
+                const device = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'Sensor-' }], optionalServices: [UART_SERVICE_UUID] }); 
+                statusSpan.textContent = `연결 중: ${device.name}`; 
+                const server = await device.gatt.connect(); 
+                const service = await server.getPrimaryService(UART_SERVICE_UUID); 
+                const characteristic = await server.getCharacteristic(UART_TX_CHAR_UUID); 
+                await characteristic.startNotifications(); 
+                characteristic.addEventListener('characteristicvaluechanged', handleBleNotifications); 
+                statusSpan.textContent = `연결됨: ${device.name}`; 
+                connectBleButton.disabled = true; 
+                collisionSimButton.disabled = true; // BLE 연결 시 시뮬레이션 버튼 비활성화
+                recordButton.disabled = false; 
+            } catch (error) { 
+                console.error('BLE 연결 실패:', error); 
+                statusSpan.textContent = 'BLE 연결 실패'; 
+                collisionSimButton.disabled = false; // 실패 시 시뮬레이션 버튼 다시 활성화
+            } 
+        });
+
         samplingRateSelect.addEventListener('change', (event) => { samplingIntervalMs = parseInt(event.target.value); });
         
         recordButton.addEventListener('click', () => {
@@ -168,6 +216,8 @@
         yAxisSelect.addEventListener('change', updateGraphAxes);
         
         // --- 4. 함수 정의 ---
+
+        // BLE 데이터 처리 (기존과 동일)
         function onDataReceived(x, y, z) { const now = Date.now(); if (now - lastSampleTime >= samplingIntervalMs) { lastSampleTime = now; processAndDisplayData(x, y, z); } }
         function handleBleNotifications(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); const dataString = decoder.decode(value); const [x, y, z] = dataString.split(','); onDataReceived(x, y, z); }
         
@@ -249,7 +299,7 @@
                 return [xValue, row[yIndex]];
             }).filter(point => point[0] >= startX && point[0] <= endX);
             
-            if (dataForFitting.length < order + 1) { alert(`${order}차 함수 피팅을 위해서는 최소 ${order + 1}개의 데이터가 범위 내에 있어야 합니다.`); return; }
+            if (dataForFitting.length < order + 1) { alert(`${order}차 함수 피팅을 위해서는 최소 ${order + 1}개의 데이터가 범위 내에 있어야 합니다. (현재 ${dataForFitting.length}개)`); return; }
             
             const result = regression.polynomial(dataForFitting, { order: order, precision: 5 });
             equationSpan.textContent = result.string;
@@ -265,13 +315,84 @@
             let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
             csvContent += "Timestamp,X,Y,Z\r\n";
             recordedData.forEach(rowArray => { csvContent += rowArray.join(",") + "\r\n"; });
-            const encodedUri = encodeURI(c);
+            const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "sensor_data.csv");
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        }
+
+        // --- 5. 새로운 충돌 시뮬레이션 로직 ---
+        function startCollisionSimulation() {
+            let frame = 0;
+            const simDuration = 300; // 시뮬레이션 총 프레임 수
+            const preCollisionFrames = 100; // 충돌 전 움직임 프레임
+            const collisionFrames = 50;    // 충돌 순간 프레임
+            const postCollisionFrames = simDuration - preCollisionFrames - collisionFrames; // 충돌 후 프레임
+            
+            let currentX = 0; // 자동차의 현재 X 위치 (애니메이션용)
+            const carSpeed = 2; // 자동차 속도 (px/프레임)
+            const wallX = simCar.parentElement.offsetWidth - simCar.offsetWidth - 10; // 벽 직전 위치
+
+            simCar.style.transform = `translateX(0px)`;
+            simExplosion.classList.remove('active');
+            
+            collisionSimulationInterval = setInterval(() => {
+                frame++;
+                let accX = 0, accY = 0, accZ = 9.8; // 기본 중력 가속도
+
+                // 1. 충돌 전: 자동차가 벽으로 이동
+                if (frame <= preCollisionFrames) {
+                    accX = -0.5; // X축 방향으로 일정 가속도 (감속)
+                    currentX += carSpeed;
+                    if (currentX >= wallX) {
+                        currentX = wallX; // 벽에 닿으면 멈춤
+                    }
+                    simCar.style.transform = `translateX(${currentX}px)`;
+                }
+                // 2. 충돌 순간: 가속도 급변
+                else if (frame > preCollisionFrames && frame <= preCollisionFrames + collisionFrames) {
+                    // 충돌 강도에 따른 가속도 변화 시뮬레이션
+                    const collisionProgress = (frame - preCollisionFrames) / collisionFrames; // 0에서 1까지
+                    accX = -200 * Math.sin(Math.PI * collisionProgress); // 순간적인 큰 음의 가속도 (충격)
+                    accY = 10 * Math.sin(Math.PI * collisionProgress * 2); // Y, Z축도 약간의 흔들림
+                    accZ = 9.8 + 5 * Math.sin(Math.PI * collisionProgress * 3);
+                    
+                    // 애니메이션: 충돌 이펙트 (폭발) 및 약간의 뒤로 밀림
+                    if (collisionProgress > 0 && collisionProgress < 0.5) {
+                        simExplosion.style.left = `${wallX - simCar.offsetWidth / 2}px`;
+                        simExplosion.style.bottom = `${simCar.offsetHeight / 2}px`;
+                        simExplosion.classList.add('active');
+                        simCar.style.transform = `translateX(${currentX - 5 * collisionProgress}px)`; // 살짝 뒤로 밀림
+                    } else if (collisionProgress >= 0.5) {
+                        simExplosion.classList.remove('active');
+                    }
+
+                }
+                // 3. 충돌 후: 가속도 안정화
+                else if (frame > preCollisionFrames + collisionFrames && frame <= simDuration) {
+                    accX = 0.1; // 약간의 반동 후 안정화
+                    accY = 0.0;
+                    accZ = 9.8;
+                }
+                // 4. 시뮬레이션 종료
+                else {
+                    clearInterval(collisionSimulationInterval);
+                    statusSpan.textContent = "자동차 충돌 시뮬레이션 완료. 측정 시작 가능.";
+                    collisionSimButton.disabled = false;
+                    recordButton.disabled = false; // 시뮬레이션 끝나면 측정 시작 가능
+                    simExplosion.classList.remove('active');
+                    return;
+                }
+
+                // 가속도 데이터 전달 (녹화 중인 경우에만)
+                if (isRecording) {
+                    // X, Y, Z 데이터를 생성하여 onDataReceived로 전달
+                    onDataReceived(accX, accY, accZ);
+                }
+
+            }, samplingIntervalMs); // samplingRateSelect의 값에 따라 데이터 생성 간격 조절
         }
     </script>
 </body>
