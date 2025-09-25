@@ -114,14 +114,78 @@
         let myChart;
         let lastGraphUpdateTime = 0;
 
+        const UART_SERVICE_UUID = "6e400001-b5a3-f3c3-e0a9-e50e24dcca9e";
+        const UART_TX_CHAR_UUID = "6e400003-b5a3-f3c3-e0a9-e50e24dcca9e";
+
         // --- 2. 차트 초기화 ---
-        myChart = new Chart(chartCanvas, { /* 이전과 동일 */ });
+        myChart = new Chart(chartCanvas, {
+            type: 'scatter',
+            data: { datasets: [{ label: '원본 데이터', data: [], backgroundColor: 'rgba(75, 192, 192, 0.6)', pointRadius: 3 }, { label: '함수 피팅', data: [], borderColor: 'rgba(255, 99, 132, 1)', type: 'line', fill: false, tension: 0.1, pointRadius: 0 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false, 
+                scales: { x: { type: 'linear', title: { display: true, text: 'X-Axis' } }, y: { title: { display: true, text: 'Y-Axis' } } },
+                plugins: {
+                    zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } },
+                    annotation: {
+                        annotations: {
+                            startLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false },
+                            endLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false }
+                        }
+                    }
+                }
+            }
+        });
 
         // --- 3. 이벤트 리스너 연결 ---
         collisionSimButton.addEventListener('click', startCollisionSimulation);
-        connectBleButton.addEventListener('click', async () => { /* 이전과 동일 */ });
+        
+        connectBleButton.addEventListener('click', async () => { 
+            if (collisionSimulationInterval) {
+                clearInterval(collisionSimulationInterval);
+                simCar.style.transform = `translateX(0px)`;
+                simExplosion.classList.remove('active');
+            }
+            try { 
+                const device = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'Sensor-' }], optionalServices: [UART_SERVICE_UUID] }); 
+                statusSpan.textContent = `연결 중: ${device.name}`; 
+                const server = await device.gatt.connect(); 
+                const service = await server.getPrimaryService(UART_SERVICE_UUID); 
+                const characteristic = await server.getCharacteristic(UART_TX_CHAR_UUID); 
+                await characteristic.startNotifications(); 
+                characteristic.addEventListener('characteristicvaluechanged', handleBleNotifications); 
+                statusSpan.textContent = `연결됨: ${device.name}`; 
+                connectBleButton.disabled = true; 
+                collisionSimButton.disabled = true;
+                recordButton.disabled = false; 
+            } catch (error) { 
+                console.error('BLE 연결 실패:', error); 
+                statusSpan.textContent = 'BLE 연결 실패'; 
+                collisionSimButton.disabled = false;
+            } 
+        });
+
         samplingRateSelect.addEventListener('change', (event) => { samplingIntervalMs = parseInt(event.target.value); });
-        recordButton.addEventListener('click', () => { isRecording = !isRecording; /* 일부 UI 로직만 수행 */ });
+        
+        recordButton.addEventListener('click', () => {
+            isRecording = !isRecording;
+            if (isRecording) {
+                lastSampleTime = 0; recordedData = []; historyTbody.innerHTML = ''; 
+                myChart.data.datasets[0].data = []; myChart.data.datasets[1].data = []; myChart.update('none');
+                equationSpan.textContent = ''; r2ValueSpan.textContent = ''; 
+                recordButton.textContent = '측정 중지'; recordButton.style.backgroundColor = '#DC3545'; 
+                downloadButton.disabled = true; fitButton.disabled = true;
+                rangeSlider.style.display = 'none';
+                if (rangeSlider.noUiSlider) { rangeSlider.noUiSlider.destroy(); }
+                statusSpan.textContent = '측정 중...';
+            } else {
+                recordButton.textContent = '측정 시작'; recordButton.style.backgroundColor = '#28A745'; statusSpan.textContent = '측정 완료';
+                if (recordedData.length > 0) { 
+                    downloadButton.disabled = false; fitButton.disabled = false;
+                    createOrUpdateSlider(); 
+                }
+            }
+        });
+        
         resetZoomButton.addEventListener('click', () => myChart.resetZoom());
         fitButton.addEventListener('click', fitPolynomialToRange);
         downloadButton.addEventListener('click', downloadSelectedData);
@@ -129,8 +193,23 @@
         yAxisSelect.addEventListener('change', updateGraphAxes);
         
         // --- 4. 함수 정의 ---
-        function onDataReceived(x, y, z) { const now = Date.now(); if (now - lastSampleTime >= samplingIntervalMs) { lastSampleTime = now; processAndDisplayData(x, y, z); } }
-        function handleBleNotifications(event) { /* 이전과 동일 */ }
+        function onDataReceived(x, y, z) { 
+            const now = Date.now(); 
+            // 시뮬레이션에서는 샘플링 간격 무시하고 모든 데이터 처리
+            processAndDisplayData(x, y, z); 
+        }
+
+        function handleBleNotifications(event) { 
+            const now = Date.now();
+            if (now - lastSampleTime >= samplingIntervalMs) {
+                lastSampleTime = now;
+                const value = event.target.value;
+                const decoder = new TextDecoder('utf-8');
+                const dataString = decoder.decode(value);
+                const [x, y, z] = dataString.split(',');
+                processAndDisplayData(x, y, z);
+            }
+        }
         
         function processAndDisplayData(x, y, z) {
             if (isRecording) {
@@ -143,88 +222,162 @@
             }
         }
         
-        function updateGraphAxes() { /* 이전과 동일 */ }
-        function alignSliderWithChart() { /* 이전과 동일 */ }
+        function updateGraphAxes() {
+            const colMap = { 'Index': -1, 'X': 1, 'Y': 2, 'Z': 3 };
+            const xAxisColumn = xAxisSelect.value;
+            const yAxisColumn = yAxisSelect.value;
+            const xIndex = colMap[xAxisColumn];
+            const yIndex = colMap[yAxisColumn];
+            const scatterData = recordedData.map((row, i) => ({ x: (xIndex === -1) ? i : row[xIndex], y: row[yIndex] }));
+            myChart.data.datasets[0].data = scatterData;
+            myChart.options.scales.x.title.text = xAxisColumn;
+            myChart.options.scales.y.title.text = yAxisColumn;
+            const now = Date.now();
+            if (now - lastGraphUpdateTime > 100) { myChart.update('none'); lastGraphUpdateTime = now; }
+        }
+
+        function alignSliderWithChart() {
+            if (!myChart || !rangeSlider.parentElement) return;
+            const chartArea = myChart.chartArea;
+            if (!chartArea) return;
+            rangeSlider.style.left = `${chartArea.left}px`;
+            rangeSlider.style.width = `${chartArea.width}px`;
+            rangeSlider.style.bottom = `${myChart.height - chartArea.bottom}px`;
+        }
         new ResizeObserver(alignSliderWithChart).observe(chartCanvas);
-        function createOrUpdateSlider() { /* 이전과 동일 */ }
-        function fitPolynomialToRange() { /* 이전과 동일 */ }
-        function downloadSelectedData() { /* 이전과 동일 */ }
+
+        function createOrUpdateSlider() {
+            const colMap = { 'Index': -1, 'X': 1, 'Y': 2, 'Z': 3 }, xAxisColumn = xAxisSelect.value, xIndex = colMap[xAxisColumn];
+            const xData = recordedData.map((row, i) => (xIndex === -1) ? i : row[xIndex]);
+            const minX = xData.length > 0 ? Math.min(...xData) : 0;
+            const maxX = xData.length > 0 ? Math.max(...xData) : 1;
+            
+            rangeSlider.style.display = 'block';
+            if (rangeSlider.noUiSlider) {
+                rangeSlider.noUiSlider.updateOptions({ range: { 'min': minX, 'max': maxX }, start: [minX, maxX] });
+            } else {
+                noUiSlider.create(rangeSlider, { start: [minX, maxX], connect: true, range: { 'min': minX, 'max': maxX } });
+            }
+            rangeSlider.noUiSlider.on('update', (values) => {
+                const startVal = parseFloat(values[0]);
+                const endVal = parseFloat(values[1]);
+                rangeValue.textContent = `${startVal.toFixed(2)} ~ ${endVal.toFixed(2)}`;
+                myChart.options.plugins.annotation.annotations.startLine.value = startVal;
+                myChart.options.plugins.annotation.annotations.startLine.display = true;
+                myChart.options.plugins.annotation.annotations.endLine.value = endVal;
+                myChart.options.plugins.annotation.annotations.endLine.display = true;
+                myChart.update('none');
+            });
+            alignSliderWithChart();
+        }
+
+        function fitPolynomialToRange() {
+            if (!rangeSlider.noUiSlider) { alert('먼저 데이터를 측정해주세요.'); return; }
+            const order = parseInt(polynomialOrderSelect.value);
+            const [startStr, endStr] = rangeSlider.noUiSlider.get();
+            const startX = parseFloat(startStr);
+            const endX = parseFloat(endStr);
+            if (startX >= endX) { alert("유효한 범위를 선택해주세요."); return; }
+            
+            const colMap = { 'Index': -1, 'X': 1, 'Y': 2, 'Z': 3 };
+            const xAxisColumn = xAxisSelect.value;
+            const yAxisColumn = yAxisSelect.value;
+            const xIndex = colMap[xAxisColumn];
+            const yIndex = colMap[yAxisColumn];
+            const dataForFitting = recordedData.map((row, i) => {
+                const xValue = (xIndex === -1) ? i : row[xIndex];
+                return [xValue, row[yIndex]];
+            }).filter(point => point[0] >= startX && point[0] <= endX);
+            
+            if (dataForFitting.length < order + 1) { alert(`${order}차 함수 피팅을 위해서는 최소 ${order + 1}개의 데이터가 범위 내에 있어야 합니다. (현재 ${dataForFitting.length}개)`); return; }
+            
+            const result = regression.polynomial(dataForFitting, { order: order, precision: 5 });
+            equationSpan.textContent = result.string;
+            r2ValueSpan.textContent = result.r2.toFixed(4);
+            const fittedPoints = result.points.map(p => ({x: p[0], y: p[1]}));
+            myChart.data.datasets[1].data = fittedPoints;
+            myChart.data.datasets[1].label = `${order}차 피팅 (R²=${result.r2.toFixed(4)})`;
+            myChart.update();
+        }
+
+        function downloadSelectedData() {
+            if (recordedData.length === 0) { alert("저장할 데이터가 없습니다."); return; }
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            csvContent += "Timestamp,X,Y,Z\r\n";
+            recordedData.forEach(rowArray => { csvContent += rowArray.join(",") + "\r\n"; });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "sensor_data.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
 
         // --- 5. 새로운 충돌 시뮬레이션 로직 ---
         function startCollisionSimulation() {
-            // 초기화
             if (collisionSimulationInterval) clearInterval(collisionSimulationInterval);
             statusSpan.textContent = "시뮬레이션 준비 중...";
             connectBleButton.disabled = true;
             collisionSimButton.disabled = true;
-            isRecording = false; // 측정 상태 초기화
-            recordedData = []; 
-            historyTbody.innerHTML = '';
-            myChart.data.datasets[0].data = [];
-            myChart.data.datasets[1].data = [];
-            myChart.update('none');
+            recordButton.disabled = true; // 시뮬레이션 중에는 수동 조작 불가
+            isRecording = false; 
+            recordedData = []; historyTbody.innerHTML = '';
+            myChart.data.datasets[0].data = []; myChart.data.datasets[1].data = []; myChart.update('none');
 
-            let currentX = 0; // 자동차 현재 위치
-            const carSpeed = 8; // 자동차 속도 증가
+            let currentX = 0;
+            const carSpeed = 8;
             const parentWidth = simCar.parentElement.offsetWidth;
-            const wallX = parentWidth - simCar.offsetWidth - 10; // 벽 위치
-            const proximityZone = wallX * 0.8; // 80% 지점에서 '근접' 상태로 변경
-            let state = 'approaching'; // 현재 상태: approaching -> proximity -> collision -> finished
+            const wallX = parentWidth - simCar.offsetWidth - 10;
+            const proximityZone = wallX * 0.8;
+            let state = 'approaching';
 
             collisionSimulationInterval = setInterval(() => {
-                let accX = 0, accY = 0, accZ = 9.8;
-
                 if (state === 'approaching') {
                     currentX += carSpeed;
                     simCar.style.transform = `translateX(${currentX}px)`;
                     if (currentX >= proximityZone) {
                         state = 'proximity';
                         statusSpan.textContent = "근접";
-                        isRecording = true; // '근접' 상태에서 데이터 기록 자동 시작
-                        lastSampleTime = 0; // 샘플링 타이머 초기화
+                        isRecording = true;
+                        lastSampleTime = 0;
                     }
                 }
                 
                 if (state === 'proximity') {
                     currentX += carSpeed;
                     simCar.style.transform = `translateX(${currentX}px)`;
-                    accX = 0.5 + Math.random() * 0.1; // 등속 운동에 가까운 가속도
-                    onDataReceived(accX, accY, accZ); // 데이터 생성
+                    let accX = 0.5 + Math.random() * 0.1;
+                    let accY = (Math.random() - 0.5) * 0.2;
+                    let accZ = 9.8 + (Math.random() - 0.5) * 0.2;
+                    onDataReceived(accX, accY, accZ);
 
                     if (currentX >= wallX) {
                         state = 'collision';
-                        simCar.style.transform = `translateX(${wallX}px)`; // 벽에 정확히 붙임
+                        simCar.style.transform = `translateX(${wallX}px)`;
                         statusSpan.textContent = "충돌!";
                         
-                        // 충돌 이펙트
                         simExplosion.style.left = `${wallX - simCar.offsetWidth / 2}px`;
                         simExplosion.style.bottom = `${simCar.offsetHeight / 2}px`;
                         simExplosion.classList.add('active');
 
-                        // 0.01초(10ms) 동안의 충돌 데이터 생성 (가우시안 형태 모사)
-                        // 정규분포의 확률밀도함수 모양을 흉내 내어 충돌 스파이크 생성
-                        const peakImpact = -200; // 최대 충격 가속도
-                        const collisionTimeStep = 0.002; // 0.01초를 5단계로 나눔
-                        for (let t = -0.004; t <= 0.004; t += collisionTimeStep) {
-                            // 가우시안 함수: exp(-t^2 / (2*sigma^2))
-                            let scale = Math.exp(-Math.pow(t / 0.002, 2) / 2);
-                            accX = peakImpact * scale + (Math.random()-0.5);
-                            accY = (Math.random() - 0.5) * 20 * scale;
-                            accZ = 9.8 + (Math.random() - 0.5) * 10 * scale;
-                            onDataReceived(accX, accY, accZ);
-                        }
+                        // 0.01초(10ms) 동안의 충돌 데이터 생성
+                        const peakImpact = -200;
+                        let accX_impact = peakImpact * Math.exp(0); // 가우시안의 정점
+                        let accY_impact = (Math.random() - 0.5) * 20;
+                        let accZ_impact = 9.8 + (Math.random() - 0.5) * 10;
+                        onDataReceived(accX_impact, accY_impact, accZ_impact);
 
-                        // 충돌 후 약간의 반동
                         setTimeout(() => {
-                           simCar.style.transform = `translateX(${wallX - 15}px)`;
+                           simCar.style.transform = `translateX(${wallX - 20}px)`;
                            simExplosion.classList.remove('active');
                            state = 'finished';
-                        }, 50); 
+                        }, 100); 
                     }
                 }
 
                 if (state === 'finished') {
-                    isRecording = false; // 기록 중지
+                    isRecording = false;
                     clearInterval(collisionSimulationInterval);
                     statusSpan.textContent = "시뮬레이션 완료";
                     collisionSimButton.disabled = false;
@@ -233,7 +386,7 @@
                     fitButton.disabled = false;
                     createOrUpdateSlider();
                 }
-            }, 20); // 애니메이션 프레임 속도 (ms)
+            }, 20); // 애니메이션 프레임 속도
         }
     </script>
 </body>
