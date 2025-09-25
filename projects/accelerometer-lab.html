@@ -194,7 +194,6 @@
         
         // --- 4. 함수 정의 ---
         function onDataReceived(x, y, z) { 
-            const now = Date.now(); 
             // 시뮬레이션에서는 샘플링 간격 무시하고 모든 데이터 처리
             processAndDisplayData(x, y, z); 
         }
@@ -314,13 +313,13 @@
             document.body.removeChild(link);
         }
 
-        // --- 5. 새로운 충돌 시뮬레이션 로직 ---
+        // --- 5. 새로운 충돌 시뮬레이션 로직 (가우시안 수정) ---
         function startCollisionSimulation() {
             if (collisionSimulationInterval) clearInterval(collisionSimulationInterval);
             statusSpan.textContent = "시뮬레이션 준비 중...";
             connectBleButton.disabled = true;
             collisionSimButton.disabled = true;
-            recordButton.disabled = true; // 시뮬레이션 중에는 수동 조작 불가
+            recordButton.disabled = true;
             isRecording = false; 
             recordedData = []; historyTbody.innerHTML = '';
             myChart.data.datasets[0].data = []; myChart.data.datasets[1].data = []; myChart.update('none');
@@ -333,24 +332,23 @@
             let state = 'approaching';
 
             collisionSimulationInterval = setInterval(() => {
-                if (state === 'approaching') {
+                if (state === 'approaching' || state === 'proximity') {
                     currentX += carSpeed;
                     simCar.style.transform = `translateX(${currentX}px)`;
-                    if (currentX >= proximityZone) {
+
+                    if (state === 'approaching' && currentX >= proximityZone) {
                         state = 'proximity';
                         statusSpan.textContent = "근접";
                         isRecording = true;
                         lastSampleTime = 0;
                     }
-                }
-                
-                if (state === 'proximity') {
-                    currentX += carSpeed;
-                    simCar.style.transform = `translateX(${currentX}px)`;
-                    let accX = 0.5 + Math.random() * 0.1;
-                    let accY = (Math.random() - 0.5) * 0.2;
-                    let accZ = 9.8 + (Math.random() - 0.5) * 0.2;
-                    onDataReceived(accX, accY, accZ);
+
+                    if (state === 'proximity') {
+                        let accX = 0.5 + Math.random() * 0.1;
+                        let accY = (Math.random() - 0.5) * 0.2;
+                        let accZ = 9.8 + (Math.random() - 0.5) * 0.2;
+                        onDataReceived(accX, accY, accZ);
+                    }
 
                     if (currentX >= wallX) {
                         state = 'collision';
@@ -361,12 +359,23 @@
                         simExplosion.style.bottom = `${simCar.offsetHeight / 2}px`;
                         simExplosion.classList.add('active');
 
-                        // 0.01초(10ms) 동안의 충돌 데이터 생성
-                        const peakImpact = -200;
-                        let accX_impact = peakImpact * Math.exp(0); // 가우시안의 정점
-                        let accY_impact = (Math.random() - 0.5) * 20;
-                        let accZ_impact = 9.8 + (Math.random() - 0.5) * 10;
-                        onDataReceived(accX_impact, accY_impact, accZ_impact);
+                        // --- 가우시안 데이터 생성 로직 ---
+                        const peakImpact = -250; // 최대 충격 가속도
+                        const stdDev = 0.002; // 표준편차 (봉우리의 뾰족한 정도)
+                        const collisionDuration = 0.01; // 충돌 시간 (10ms)
+                        const steps = 10; // 10ms 동안 생성할 데이터 포인트 수
+                        
+                        for (let i = 0; i <= steps; i++) {
+                            const t = (i / steps - 0.5) * collisionDuration; // -0.005초 ~ +0.005초
+                            const scale = Math.exp(-Math.pow(t, 2) / (2 * Math.pow(stdDev, 2)));
+                            
+                            const accX = peakImpact * scale + (Math.random() - 0.5);
+                            const accY = (Math.random() - 0.5) * 30 * scale;
+                            const accZ = 9.8 + (Math.random() - 0.5) * 20 * scale;
+                            
+                            onDataReceived(accX, accY, accZ);
+                        }
+                        // ---------------------------------
 
                         setTimeout(() => {
                            simCar.style.transform = `translateX(${wallX - 20}px)`;
@@ -386,7 +395,7 @@
                     fitButton.disabled = false;
                     createOrUpdateSlider();
                 }
-            }, 20); // 애니메이션 프레임 속도
+            }, 20);
         }
     </script>
 </body>
