@@ -44,40 +44,45 @@
             <button id="downloadButton" disabled>5. 엑셀 저장</button>
         </div>
         
-        <h2>측정 기록</h2>
-        <div class="table-container">
-            <table id="historyTable">
-                <thead>
-                    <tr>
-                        <th><input type="checkbox" id="selectAllCheckbox"></th>
-                        <th>Timestamp</th>
-                        <th>X</th>
-                        <th>Y</th>
-                        <th>Z</th>
-                    </tr>
-                </thead>
-                <tbody id="historyTbody"></tbody>
-            </table>
-        </div>
+        <div class="main-layout">
 
-        <div class="graph-section">
-            <h2>그래프 시각화 및 함수 피팅</h2>
-            <div class="graph-controls">
-                <span>X축:</span>
-                <select id="xAxisSelect"><option value="Timestamp">Timestamp</option><option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option></select>
-                <span>Y축:</span>
-                <select id="yAxisSelect"><option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option></select>
-                <button id="updateGraphButton">그래프 업데이트</button>
-                <button id="resetZoomButton">그래프 줌 리셋</button>
+            <div class="content-column">
+                <h2>측정 기록</h2>
+                <div class="table-container">
+                    <table id="historyTable">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllCheckbox"></th>
+                                <th>Timestamp</th>
+                                <th>X</th>
+                                <th>Y</th>
+                                <th>Z</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTbody"></tbody>
+                    </table>
+                </div>
             </div>
-            <div class="fit-result">
-                <p>피팅 방정식: <span id="equation"></span></p>
-                <p><b>결정계수 (R²): <span id="r2_value"></span></b></p>
-            </div>
-            <div class="chart-container"><canvas id="myChart"></canvas></div>
-        </div>
-    </div>
 
+            <div class="content-column">
+                <h2>그래프 시각화 및 함수 피팅</h2>
+                <div class="graph-controls">
+                    <span>X축:</span>
+                    <select id="xAxisSelect"><option value="Timestamp">Timestamp</option><option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option></select>
+                    <span>Y축:</span>
+                    <select id="yAxisSelect"><option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option></select>
+                    <button id="updateGraphButton">그래프 업데이트</button>
+                    <button id="resetZoomButton">그래프 줌 리셋</button>
+                </div>
+                <div class="fit-result">
+                    <p>피팅 방정식: <span id="equation"></span></p>
+                    <p><b>결정계수 (R²): <span id="r2_value"></span></b></p>
+                </div>
+                <div class="chart-container"><canvas id="myChart"></canvas></div>
+            </div>
+            
+        </div>
+        </div>
     <script>
         // 1. UI 요소 및 전역 변수 선언
         const connectBleButton = document.getElementById('connectBleButton');
@@ -333,4 +338,5 @@
         }
     </script>
 </body>
+
 </html>
