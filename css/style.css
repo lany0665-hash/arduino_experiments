@@ -53,7 +53,7 @@ button:disabled { background-color: #ccc; cursor: not-allowed; }
 
 /* --- 🔻 핵심 수정 부분 🔻 --- */
 .table-container { 
-    height: 400px;     /* 테이블 컨테이너의 높이를 그래프와 동일하게 고정 */
+    height: 480px;     /* 테이블 컨테이너의 높이를 그래프와 동일하게 고정 */
     overflow-y: auto;  /* 내용이 넘치면 세로 스크롤바 자동 생성 */
     border: 1px solid #ccc;
 }
@@ -67,3 +67,4 @@ table { border-collapse: collapse; width: 100%; text-align: center; }
 th, td { border: 1px solid #ddd; padding: 8px; font-size: 0.9em; }
 th { background-color: #f2f2f2; }
 .graph-controls { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 15px;}
+
