@@ -9,6 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/regression/2.0.1/regression.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
@@ -56,17 +57,21 @@
 
             <div class="content-column">
                 <h2>그래프 시각화 및 함수 피팅</h2>
+                
+                <div class="chart-wrapper">
+                    <div class="chart-container"><canvas id="myChart"></canvas></div>
+                    <div id="range-slider" style="display:none;"></div>
+                </div>
+
                 <div class="graph-controls">
                     <span>X축:</span>
                     <select id="xAxisSelect"><option value="Index">데이터 순서 (Index)</option><option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option></select>
                     <span>Y축:</span>
                     <select id="yAxisSelect"><option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option></select>
-                    <button id="resetZoomButton">그래프 줌 리셋</button>
+                    <button id="resetZoomButton">줌 리셋</button>
                 </div>
                  <div class="graph-controls fit-controls">
-                    <span id="range-label" style="display:none;">피팅 범위:</span>
-                    <div id="range-slider" style="width: 50%; height: 20px; display:none;"></div>
-                    <span id="range-value" style="font-weight: bold; margin-left: 15px;"></span>
+                    <span>피팅 범위: <b id="range-value"></b></span>
                     <select id="polynomialOrderSelect" style="margin-left: auto;">
                         <option value="1">1차</option><option value="2">2차</option><option value="3" selected>3차</option>
                     </select>
@@ -77,7 +82,6 @@
                     <p>피팅 방정식: <span id="equation"></span></p>
                     <p><b>결정계수 (R²): <span id="r2_value"></span></b></p>
                 </div>
-                <div class="chart-container"><canvas id="myChart"></canvas></div>
             </div>
         </div>
     </div>
@@ -101,7 +105,6 @@
         const polynomialOrderSelect = document.getElementById('polynomialOrderSelect');
         const rangeSlider = document.getElementById('range-slider');
         const rangeValue = document.getElementById('range-value');
-        const rangeLabel = document.getElementById('range-label');
 
         let recordedData = []; 
         let isRecording = false;
@@ -118,7 +121,19 @@
         myChart = new Chart(chartCanvas, {
             type: 'scatter',
             data: { datasets: [{ label: '원본 데이터', data: [], backgroundColor: 'rgba(75, 192, 192, 0.6)', pointRadius: 3 }, { label: '함수 피팅', data: [], borderColor: 'rgba(255, 99, 132, 1)', type: 'line', fill: false, tension: 0.1, pointRadius: 0 }] },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'linear', title: { display: true, text: 'X-Axis' } }, y: { title: { display: true, text: 'Y-Axis' } } }, plugins: { zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } } } }
+            options: {
+                responsive: true, maintainAspectRatio: false, 
+                scales: { x: { type: 'linear', title: { display: true, text: 'X-Axis' } }, y: { title: { display: true, text: 'Y-Axis' } } },
+                plugins: {
+                    zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } },
+                    annotation: {
+                        annotations: {
+                            startLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false },
+                            endLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false }
+                        }
+                    }
+                }
+            }
         });
 
         // --- 3. 이벤트 리스너 연결 ---
@@ -134,7 +149,7 @@
                 equationSpan.textContent = ''; r2ValueSpan.textContent = ''; 
                 recordButton.textContent = '측정 중지'; recordButton.style.backgroundColor = '#DC3545'; 
                 downloadButton.disabled = true; fitButton.disabled = true;
-                rangeSlider.style.display = 'none'; rangeValue.style.display = 'none'; rangeLabel.style.display = 'none';
+                rangeSlider.style.display = 'none';
                 if (rangeSlider.noUiSlider) { rangeSlider.noUiSlider.destroy(); }
                 statusSpan.textContent = '측정 중...';
             } else {
@@ -181,33 +196,39 @@
             if (now - lastGraphUpdateTime > 200) { myChart.update('none'); lastGraphUpdateTime = now; }
         }
 
+        function alignSliderWithChart() {
+            if (!myChart || !rangeSlider.parentElement) return;
+            const chartArea = myChart.chartArea;
+            if (!chartArea) return;
+            rangeSlider.style.left = `${chartArea.left}px`;
+            rangeSlider.style.width = `${chartArea.width}px`;
+            rangeSlider.style.bottom = `${myChart.height - chartArea.bottom}px`;
+        }
+        new ResizeObserver(alignSliderWithChart).observe(chartCanvas);
+
         function createOrUpdateSlider() {
-            const colMap = { 'Index': -1, 'X': 1, 'Y': 2, 'Z': 3 };
-            const xAxisColumn = xAxisSelect.value;
-            const xIndex = colMap[xAxisColumn];
+            const colMap = { 'Index': -1, 'X': 1, 'Y': 2, 'Z': 3 }, xAxisColumn = xAxisSelect.value, xIndex = colMap[xAxisColumn];
             const xData = recordedData.map((row, i) => (xIndex === -1) ? i : row[xIndex]);
-            
-            const minX = Math.min(...xData);
-            const maxX = Math.max(...xData);
+            const minX = xData.length > 0 ? Math.min(...xData) : 0;
+            const maxX = xData.length > 0 ? Math.max(...xData) : 1;
             
             rangeSlider.style.display = 'block';
-            rangeValue.style.display = 'inline';
-            rangeLabel.style.display = 'inline';
-
             if (rangeSlider.noUiSlider) {
                 rangeSlider.noUiSlider.updateOptions({ range: { 'min': minX, 'max': maxX }, start: [minX, maxX] });
             } else {
-                noUiSlider.create(rangeSlider, {
-                    start: [minX, maxX],
-                    connect: true,
-                    range: { 'min': minX, 'max': maxX }
-                });
+                noUiSlider.create(rangeSlider, { start: [minX, maxX], connect: true, range: { 'min': minX, 'max': maxX } });
             }
             rangeSlider.noUiSlider.on('update', (values) => {
-                const startVal = parseFloat(values[0]).toFixed(2);
-                const endVal = parseFloat(values[1]).toFixed(2);
-                rangeValue.textContent = `범위: ${startVal} ~ ${endVal}`;
+                const startVal = parseFloat(values[0]);
+                const endVal = parseFloat(values[1]);
+                rangeValue.textContent = `${startVal.toFixed(2)} ~ ${endVal.toFixed(2)}`;
+                myChart.options.plugins.annotation.annotations.startLine.value = startVal;
+                myChart.options.plugins.annotation.annotations.startLine.display = true;
+                myChart.options.plugins.annotation.annotations.endLine.value = endVal;
+                myChart.options.plugins.annotation.annotations.endLine.display = true;
+                myChart.update('none');
             });
+            alignSliderWithChart();
         }
 
         function fitPolynomialToRange() {
@@ -223,13 +244,12 @@
             const yAxisColumn = yAxisSelect.value;
             const xIndex = colMap[xAxisColumn];
             const yIndex = colMap[yAxisColumn];
-
             const dataForFitting = recordedData.map((row, i) => {
                 const xValue = (xIndex === -1) ? i : row[xIndex];
                 return [xValue, row[yIndex]];
             }).filter(point => point[0] >= startX && point[0] <= endX);
             
-            if (dataForFitting.length < order + 1) { alert(`${order}차 함수 피팅을 위해서는 최소 ${order + 1}개의 데이터가 범위 내에 있어야 합니다. (현재 ${dataForFitting.length}개)`); return; }
+            if (dataForFitting.length < order + 1) { alert(`${order}차 함수 피팅을 위해서는 최소 ${order + 1}개의 데이터가 범위 내에 있어야 합니다.`); return; }
             
             const result = regression.polynomial(dataForFitting, { order: order, precision: 5 });
             equationSpan.textContent = result.string;
@@ -245,7 +265,7 @@
             let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
             csvContent += "Timestamp,X,Y,Z\r\n";
             recordedData.forEach(rowArray => { csvContent += rowArray.join(",") + "\r\n"; });
-            const encodedUri = encodeURI(csvContent);
+            const encodedUri = encodeURI(c);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
             link.setAttribute("download", "sensor_data.csv");
