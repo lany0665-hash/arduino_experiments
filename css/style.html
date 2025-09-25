@@ -12,19 +12,28 @@ body {
     padding: 30px; 
     border-radius: 10px; 
     box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
-    width: 80%; 
-    max-width: 1000px; 
+    width: 95%; /* 너비를 넓힘 */
+    max-width: 1600px; /* 최대 너비를 넓힘 */
     margin-bottom: 20px; 
 }
+
+/* --- 🔻 핵심 레이아웃 수정 부분 🔻 --- */
+.main-layout {
+    display: flex; /* 자식 요소들을 가로로 배치 */
+    gap: 20px;     /* 두 열 사이의 간격 */
+}
+.content-column {
+    flex: 1; /* 두 열이 공간을 1:1 비율로 나눠가짐 */
+    min-width: 0; /* flex item이 줄어들 때 내용이 깨지는 것을 방지 */
+}
+/* --- 🔺 핵심 레이아웃 수정 부분 🔺 --- */
+
 .connection-section { 
     border: 1px solid #ddd; 
     padding: 15px; 
     border-radius: 5px; 
     margin-bottom: 20px; 
     text-align: center; 
-}
-.connection-section h3 { 
-    margin-top: 0; 
 }
 .button-group { 
     margin: 20px 0; 
@@ -34,14 +43,17 @@ body {
     justify-content: center; 
     align-items: center;
 }
-button { 
-    padding: 10px 20px; 
+button, select {
+    padding: 10px; 
     font-size: 1em; 
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+button { 
     cursor: pointer; 
-    border: none; 
-    border-radius: 5px; 
     color: white; 
     transition: background-color 0.3s; 
+    border: none;
 }
 .ble-button { background-color: #007BFF; }
 .sim-button { background-color: #58af5b; }
@@ -51,7 +63,7 @@ button {
 #fitButton { background-color: #6f42c1; }
 #resetZoomButton { background-color: #6c757d;}
 button:disabled { 
-    background-color: #6c757d; 
+    background-color: #ccc; 
     cursor: not-allowed; 
 }
 #status, #equation { 
@@ -65,16 +77,11 @@ button:disabled {
 .fit-result { 
     min-height: 50px; 
 }
-
-/* --- 🔻 핵심 수정 부분 🔻 --- */
 .table-container { 
-    max-height: 300px; /* 테이블 컨테이너의 최대 높이를 300px로 제한 */
-    overflow-y: auto;  /* 내용이 넘치면 세로 스크롤바 자동 생성 */
-    margin-top: 20px; 
+    height: 485px; /* 그래프 영역과 높이를 맞춤 */
+    overflow-y: auto;
     border: 1px solid #ccc; 
 }
-/* --- 🔺 핵심 수정 부분 🔺 --- */
-
 table { 
     border-collapse: collapse; 
     width: 100%; 
@@ -90,8 +97,7 @@ th {
 }
 .chart-container { 
     width: 100%; 
-    height: 400px; 
-    margin-top: 20px;
+    height: 400px;
 }
 .graph-controls { 
     display: flex; 
