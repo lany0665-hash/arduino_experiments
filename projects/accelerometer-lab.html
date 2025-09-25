@@ -3,11 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <title>가속도계 데이터 분석</title>
+    
     <link rel="stylesheet" href="../css/style.css">
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" rel="stylesheet">
+    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/regression/2.0.1/regression.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -59,15 +64,15 @@
                     <button id="resetZoomButton">그래프 줌 리셋</button>
                 </div>
                  <div class="graph-controls fit-controls">
-                    <span>피팅 범위 (X축 데이터 기준):</span>
-                    <input type="number" id="fitRangeStart" placeholder="시작">
-                    <span>~</span>
-                    <input type="number" id="fitRangeEnd" placeholder="끝">
-                    <select id="polynomialOrderSelect">
+                    <span id="range-label" style="display:none;">피팅 범위:</span>
+                    <div id="range-slider" style="width: 50%; height: 20px; display:none;"></div>
+                    <span id="range-value" style="font-weight: bold; margin-left: 15px;"></span>
+                    <select id="polynomialOrderSelect" style="margin-left: auto;">
                         <option value="1">1차</option><option value="2">2차</option><option value="3" selected>3차</option>
                     </select>
                     <button id="fitButton" disabled>함수 피팅</button>
                 </div>
+
                 <div class="fit-result">
                     <p>피팅 방정식: <span id="equation"></span></p>
                     <p><b>결정계수 (R²): <span id="r2_value"></span></b></p>
@@ -78,7 +83,7 @@
     </div>
 
     <script>
-        // 1. UI 요소 및 전역 변수 선언
+        // --- 1. UI 요소 및 전역 변수 선언 ---
         const connectBleButton = document.getElementById('connectBleButton');
         const simulationButton = document.getElementById('simulationButton');
         const recordButton = document.getElementById('recordButton');
@@ -94,8 +99,9 @@
         const resetZoomButton = document.getElementById('resetZoomButton');
         const chartCanvas = document.getElementById('myChart');
         const polynomialOrderSelect = document.getElementById('polynomialOrderSelect');
-        const fitRangeStartInput = document.getElementById('fitRangeStart'); // 새로 추가
-        const fitRangeEndInput = document.getElementById('fitRangeEnd');   // 새로 추가
+        const rangeSlider = document.getElementById('range-slider');
+        const rangeValue = document.getElementById('range-value');
+        const rangeLabel = document.getElementById('range-label');
 
         let recordedData = []; 
         let isRecording = false;
@@ -103,113 +109,127 @@
         let samplingIntervalMs = 1000;
         let lastSampleTime = 0;
         let myChart;
-        let lastGraphUpdateTime = 0; // 실시간 그래프를 위한 변수
+        let lastGraphUpdateTime = 0;
 
-        // 2. 차트 초기화
+        const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+        const UART_TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+
+        // --- 2. 차트 초기화 ---
         myChart = new Chart(chartCanvas, {
             type: 'scatter',
             data: { datasets: [{ label: '원본 데이터', data: [], backgroundColor: 'rgba(75, 192, 192, 0.6)', pointRadius: 3 }, { label: '함수 피팅', data: [], borderColor: 'rgba(255, 99, 132, 1)', type: 'line', fill: false, tension: 0.1, pointRadius: 0 }] },
             options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'linear', title: { display: true, text: 'X-Axis' } }, y: { title: { display: true, text: 'Y-Axis' } } }, plugins: { zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } } } }
         });
 
-        // 3. 이벤트 리스너 연결
+        // --- 3. 이벤트 리스너 연결 ---
         simulationButton.addEventListener('click', () => { statusSpan.textContent = "가상 센서 연결됨"; connectBleButton.disabled = true; simulationButton.disabled = true; recordButton.disabled = false; let simCounter = 0; simulationInterval = setInterval(() => { const x = Math.sin(simCounter * 0.1) * 10 + Math.random(); const y = Math.cos(simCounter * 0.1) * 10 + Math.random(); const z = 5 + (Math.random() - 0.5) * 2; simCounter++; onDataReceived(x, y, z); }, 10); });
-        connectBleButton.addEventListener('click', async () => { /* 이전과 동일 */ });
+        connectBleButton.addEventListener('click', async () => { try { const device = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'Sensor-' }], optionalServices: [UART_SERVICE_UUID] }); statusSpan.textContent = `연결 중: ${device.name}`; const server = await device.gatt.connect(); const service = await server.getPrimaryService(UART_SERVICE_UUID); const characteristic = await server.getCharacteristic(UART_TX_CHAR_UUID); await characteristic.startNotifications(); characteristic.addEventListener('characteristicvaluechanged', handleBleNotifications); statusSpan.textContent = `연결됨: ${device.name}`; connectBleButton.disabled = true; simulationButton.disabled = true; recordButton.disabled = false; } catch (error) { console.error('BLE 연결 실패:', error); statusSpan.textContent = 'BLE 연결 실패'; } });
         samplingRateSelect.addEventListener('change', (event) => { samplingIntervalMs = parseInt(event.target.value); });
         
         recordButton.addEventListener('click', () => {
             isRecording = !isRecording;
             if (isRecording) {
                 lastSampleTime = 0; recordedData = []; historyTbody.innerHTML = ''; 
-                myChart.data.datasets[0].data = []; myChart.data.datasets[1].data = []; myChart.update(); // 그래프 초기화
+                myChart.data.datasets[0].data = []; myChart.data.datasets[1].data = []; myChart.update('none');
                 equationSpan.textContent = ''; r2ValueSpan.textContent = ''; 
                 recordButton.textContent = '측정 중지'; recordButton.style.backgroundColor = '#DC3545'; 
-                downloadButton.disabled = true; fitButton.disabled = true; statusSpan.textContent = '측정 중...';
+                downloadButton.disabled = true; fitButton.disabled = true;
+                rangeSlider.style.display = 'none'; rangeValue.style.display = 'none'; rangeLabel.style.display = 'none';
+                if (rangeSlider.noUiSlider) { rangeSlider.noUiSlider.destroy(); }
+                statusSpan.textContent = '측정 중...';
             } else {
                 recordButton.textContent = '측정 시작'; recordButton.style.backgroundColor = '#28A745'; statusSpan.textContent = '측정 완료';
-                if (recordedData.length > 0) { downloadButton.disabled = false; fitButton.disabled = false; }
+                if (recordedData.length > 0) { 
+                    downloadButton.disabled = false; fitButton.disabled = false;
+                    createOrUpdateSlider(); 
+                }
             }
         });
         
         resetZoomButton.addEventListener('click', () => myChart.resetZoom());
         fitButton.addEventListener('click', fitPolynomialToRange);
         downloadButton.addEventListener('click', downloadSelectedData);
-        // 축 변경 시 그래프 즉시 업데이트
-        xAxisSelect.addEventListener('change', updateGraphAxes);
+        xAxisSelect.addEventListener('change', () => { updateGraphAxes(); if(rangeSlider.noUiSlider) createOrUpdateSlider(); });
         yAxisSelect.addEventListener('change', updateGraphAxes);
         
-        // --- 🔻 핵심 변경 사항 2: 함수 로직 수정 🔻 ---
-
-        // 4. 함수 정의
+        // --- 4. 함수 정의 ---
         function onDataReceived(x, y, z) { const now = Date.now(); if (now - lastSampleTime >= samplingIntervalMs) { lastSampleTime = now; processAndDisplayData(x, y, z); } }
-        function handleBleNotifications(event) { /* 이전과 동일 */ }
+        function handleBleNotifications(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); const dataString = decoder.decode(value); const [x, y, z] = dataString.split(','); onDataReceived(x, y, z); }
         
         function processAndDisplayData(x, y, z) {
             if (isRecording) {
                 const timestamp = new Date().toISOString();
                 const currentData = [timestamp, parseFloat(x), parseFloat(y), parseFloat(z)];
                 recordedData.push(currentData);
-                
-                // 테이블에 행 추가
-                const newRow = historyTbody.insertRow(0); // 새 데이터를 맨 위에 추가
+                const newRow = historyTbody.insertRow(0);
                 newRow.innerHTML = `<td>${currentData[0]}</td><td>${currentData[1].toFixed(4)}</td><td>${currentData[2].toFixed(4)}</td><td>${currentData[3].toFixed(4)}</td>`;
-
-                // 실시간 그래프 업데이트
-                updateGraphAxes(); // 축 설정에 따라 그래프 업데이트
+                updateGraphAxes();
             }
         }
         
-        // 축이 변경되거나 새 데이터가 들어올 때 그래프를 다시 그리는 함수
         function updateGraphAxes() {
-            const colMap = { 'Index': -1, 'X': 1, 'Y': 2, 'Z': 3 }; // Timestamp 대신 Index 사용
+            const colMap = { 'Index': -1, 'X': 1, 'Y': 2, 'Z': 3 };
             const xAxisColumn = xAxisSelect.value;
             const yAxisColumn = yAxisSelect.value;
             const xIndex = colMap[xAxisColumn];
             const yIndex = colMap[yAxisColumn];
-            
-            const scatterData = recordedData.map((row, i) => ({
-                x: (xIndex === -1) ? i : row[xIndex],
-                y: row[yIndex]
-            }));
-
+            const scatterData = recordedData.map((row, i) => ({ x: (xIndex === -1) ? i : row[xIndex], y: row[yIndex] }));
             myChart.data.datasets[0].data = scatterData;
             myChart.options.scales.x.title.text = xAxisColumn;
             myChart.options.scales.y.title.text = yAxisColumn;
-
-            // 성능을 위해 200ms 간격으로만 그래프 업데이트 실행
             const now = Date.now();
-            if (now - lastGraphUpdateTime > 200) {
-                myChart.update('none'); // 애니메이션 없이 업데이트
-                lastGraphUpdateTime = now;
+            if (now - lastGraphUpdateTime > 200) { myChart.update('none'); lastGraphUpdateTime = now; }
+        }
+
+        function createOrUpdateSlider() {
+            const colMap = { 'Index': -1, 'X': 1, 'Y': 2, 'Z': 3 };
+            const xAxisColumn = xAxisSelect.value;
+            const xIndex = colMap[xAxisColumn];
+            const xData = recordedData.map((row, i) => (xIndex === -1) ? i : row[xIndex]);
+            
+            const minX = Math.min(...xData);
+            const maxX = Math.max(...xData);
+            
+            rangeSlider.style.display = 'block';
+            rangeValue.style.display = 'inline';
+            rangeLabel.style.display = 'inline';
+
+            if (rangeSlider.noUiSlider) {
+                rangeSlider.noUiSlider.updateOptions({ range: { 'min': minX, 'max': maxX }, start: [minX, maxX] });
+            } else {
+                noUiSlider.create(rangeSlider, {
+                    start: [minX, maxX],
+                    connect: true,
+                    range: { 'min': minX, 'max': maxX }
+                });
             }
+            rangeSlider.noUiSlider.on('update', (values) => {
+                const startVal = parseFloat(values[0]).toFixed(2);
+                const endVal = parseFloat(values[1]).toFixed(2);
+                rangeValue.textContent = `범위: ${startVal} ~ ${endVal}`;
+            });
         }
 
         function fitPolynomialToRange() {
+            if (!rangeSlider.noUiSlider) { alert('먼저 데이터를 측정해주세요.'); return; }
             const order = parseInt(polynomialOrderSelect.value);
-            const startX = parseFloat(fitRangeStartInput.value);
-            const endX = parseFloat(fitRangeEndInput.value);
-
-            if (isNaN(startX) || isNaN(endX) || startX >= endX) {
-                alert("유효한 X축 시작과 끝 범위를 입력해주세요.");
-                return;
-            }
-
+            const [startStr, endStr] = rangeSlider.noUiSlider.get();
+            const startX = parseFloat(startStr);
+            const endX = parseFloat(endStr);
+            if (startX >= endX) { alert("유효한 범위를 선택해주세요."); return; }
+            
             const colMap = { 'Index': -1, 'X': 1, 'Y': 2, 'Z': 3 };
             const xAxisColumn = xAxisSelect.value;
             const yAxisColumn = yAxisSelect.value;
             const xIndex = colMap[xAxisColumn];
             const yIndex = colMap[yAxisColumn];
 
-            // 입력된 X축 범위에 해당하는 데이터만 필터링
             const dataForFitting = recordedData.map((row, i) => {
                 const xValue = (xIndex === -1) ? i : row[xIndex];
                 return [xValue, row[yIndex]];
             }).filter(point => point[0] >= startX && point[0] <= endX);
-
-            if (dataForFitting.length < order + 1) {
-                alert(`${order}차 함수 피팅을 위해서는 최소 ${order + 1}개의 데이터가 범위 내에 있어야 합니다. (현재 ${dataForFitting.length}개)`);
-                return;
-            }
+            
+            if (dataForFitting.length < order + 1) { alert(`${order}차 함수 피팅을 위해서는 최소 ${order + 1}개의 데이터가 범위 내에 있어야 합니다. (현재 ${dataForFitting.length}개)`); return; }
             
             const result = regression.polynomial(dataForFitting, { order: order, precision: 5 });
             equationSpan.textContent = result.string;
