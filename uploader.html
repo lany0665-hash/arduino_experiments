@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>아두이노 펌웨어 업로더</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://unpkg.com/avrbro/dist/avrbro.js"></script>
+    <style>
+        /* 이 페이지 전용 스타일 */
+        #firmwareSelect { font-size: 1.2em; padding: 10px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>아두이노 펌웨어 준비</h1>
+        <p>아두이노 UNO 또는 Nano를 PC에 연결하고<br>아래 메뉴에서 설치할 펌웨어를 선택한 후, 버튼을 누르세요.</p>
+        
+        <select id="firmwareSelect">
+            <option value="">-- 펌웨어를 선택하세요 --</option>
+            <option value="YOUR_ACCELEROMETER_HEX_URL_HERE">가속도계 분석 펌웨어</option>
+
+
+
+
+
+
+
+            </select>
+
+        <button id="uploadButton">펌웨어 설치 시작</button>
+        <div id="status">연결 대기 중...</div>
+        <div id="progressBar"><div id="progress">0%</div></div>
+        <hr>
+        <p>완료되면 <a href="index.html">메인 페이지</a>로 돌아가 프로젝트를 시작하세요.</p>
+    </div>
+
+    <script>
+        const uploadButton = document.getElementById('uploadButton');
+        const statusDiv = document.getElementById('status');
+        const progressDiv = document.getElementById('progress');
+        const firmwareSelect = document.getElementById('firmwareSelect');
+        
+        const avrbro = new Avrbro();
+
+        uploadButton.addEventListener('click', async () => {
+            if (!('serial' in navigator)) {
+                alert('이 브라우저는 Web Serial API를 지원하지 않습니다. Chrome이나 Edge 브라우저를 사용해주세요.');
+                return;
+            }
+
+            // #############################################################
+            // ###        핵심 변경 사항: 선택된 펌웨어 URL 가져오기       ###
+            // #############################################################
+            const selectedHexUrl = firmwareSelect.value;
+            if (!selectedHexUrl) {
+                alert('업로드할 펌웨어를 선택해주세요.');
+                return;
+            }
+
+            uploadButton.disabled = true;
+            statusDiv.textContent = '펌웨어 파일 다운로드 중...';
+            
+            try {
+                // 1. 선택된 URL로 .hex 파일 가져오기
+                const response = await fetch(selectedHexUrl);
+                if (!response.ok) {
+                    throw new Error(`펌웨어 파일 다운로드 실패: ${response.statusText}`);
+                }
+                const hex = await response.text();
+                statusDiv.textContent = '.hex 파일 준비 완료. 아두이노에 연결하세요.';
+
+                // 2. 아두이노에 연결
+                await avrbro.connect();
+                statusDiv.textContent = '아두이노 연결 성공! 업로드를 시작합니다...';
+
+                // 3. 펌웨어 업로드 (프로그래스 바 업데이트 포함)
+                await avrbro.flash(hex, (progress) => {
+                    const percent = (progress * 100).toFixed(0);
+                    progressDiv.style.width = percent + '%';
+                    progressDiv.textContent = percent + '%';
+                });
+                
+                statusDiv.textContent = '✅ 업로드 성공! 이제 데이터 분석 페이지로 이동하세요.';
+
+            } catch (error) {
+                statusDiv.textContent = `❌ 오류 발생: ${error.message}`;
+                console.error(error);
+            } finally {
+                uploadButton.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

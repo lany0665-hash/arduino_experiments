@@ -1,0 +1,88 @@
+/* 공통 스타일 시트 */
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background-color: #f9f9f9; }
+.container { background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 80%; max-width: 1000px; margin-bottom: 20px; }
+.project-list { list-style: none; padding: 0; }
+.project-list li { margin: 15px 0; }
+.project-list a { text-decoration: none; font-size: 1.5em; color: #007BFF; }
+.project-list a:hover { text-decoration: underline; }
+
+.connection-section { 
+    border: 1px solid #ddd; 
+    padding: 15px; 
+    border-radius: 5px; 
+    margin-bottom: 20px; 
+    text-align: center; 
+}
+.connection-section h3 { 
+    margin-top: 0; 
+}
+.button-group { 
+    margin: 20px 0; 
+    display: flex; 
+    gap: 10px; 
+    flex-wrap: wrap; 
+    justify-content: center; 
+    align-items: center;
+}
+button { 
+    padding: 10px 20px; 
+    font-size: 1em; 
+    cursor: pointer; 
+    border: none; 
+    border-radius: 5px; 
+    color: white; 
+    transition: background-color 0.3s; 
+}
+.ble-button { background-color: #007BFF; }
+.sim-button { background-color: #58af5b; }
+#recordButton { background-color: #28A745; }
+#downloadButton { background-color: #17A2B8; }
+#drawGraphButton { background-color: #FFC107; color: #333; }
+#fitButton { background-color: #6f42c1; }
+#resetZoomButton { background-color: #6c757d;}
+button:disabled { 
+    background-color: #6c757d; 
+    cursor: not-allowed; 
+}
+#status, #equation { 
+    font-weight: bold; 
+    text-align: center; 
+}
+#equation, #r2_value { 
+    color: #DC3545; 
+    font-size: 1.1em; 
+}
+.fit-result { 
+    min-height: 50px; 
+}
+.table-container { 
+    max-height: 300px; 
+    overflow-y: auto; 
+    margin-top: 20px; 
+    border: 1px solid #ccc; 
+}
+table { 
+    border-collapse: collapse; 
+    width: 100%; 
+    text-align: center; 
+}
+th, td { 
+    border: 1px solid #ddd; 
+    padding: 8px; 
+    font-size: 0.9em; 
+}
+th { 
+    background-color: #f2f2f2; 
+}
+.chart-container { 
+    width: 100%; 
+    height: 400px; 
+    margin-top: 20px;
+}
+.graph-controls { 
+    display: flex; 
+    gap: 10px; 
+    align-items: center; 
+    justify-content: center; 
+    margin-top: 15px;
+}
