@@ -363,7 +363,7 @@
                         const peakImpact = -250; // 최대 충격 가속도
                         const stdDev = 0.002; // 표준편차 (봉우리의 뾰족한 정도)
                         const collisionDuration = 0.01; // 충돌 시간 (10ms)
-                        const steps = 10; // 10ms 동안 생성할 데이터 포인트 수
+                        const steps = 5; // 10ms 동안 생성할 데이터 포인트 수
                         
                         for (let i = 0; i <= steps; i++) {
                             const t = (i / steps - 0.5) * collisionDuration; // -0.005초 ~ +0.005초
