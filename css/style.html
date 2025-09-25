@@ -1,11 +1,21 @@
 /* 공통 스타일 시트 */
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background-color: #f9f9f9; }
-.container { background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 80%; max-width: 1000px; margin-bottom: 20px; }
-.project-list { list-style: none; padding: 0; }
-.project-list li { margin: 15px 0; }
-.project-list a { text-decoration: none; font-size: 1.5em; color: #007BFF; }
-.project-list a:hover { text-decoration: underline; }
-
+body { 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    padding: 20px; 
+    background-color: #f9f9f9; 
+}
+.container { 
+    background-color: white; 
+    padding: 30px; 
+    border-radius: 10px; 
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
+    width: 80%; 
+    max-width: 1000px; 
+    margin-bottom: 20px; 
+}
 .connection-section { 
     border: 1px solid #ddd; 
     padding: 15px; 
@@ -55,12 +65,16 @@ button:disabled {
 .fit-result { 
     min-height: 50px; 
 }
+
+/* --- 🔻 핵심 수정 부분 🔻 --- */
 .table-container { 
-    max-height: 300px; 
-    overflow-y: auto; 
+    max-height: 300px; /* 테이블 컨테이너의 최대 높이를 300px로 제한 */
+    overflow-y: auto;  /* 내용이 넘치면 세로 스크롤바 자동 생성 */
     margin-top: 20px; 
     border: 1px solid #ccc; 
 }
+/* --- 🔺 핵심 수정 부분 🔺 --- */
+
 table { 
     border-collapse: collapse; 
     width: 100%; 
