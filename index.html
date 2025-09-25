@@ -7,14 +7,79 @@
 </head>
 <body>
     <div class="container">
-        <h1>아두이노 웹 실험실</h1>
-        <p>환영합니다! 아래에서 수행할 실험 프로젝트를 선택하세요.</p>
-        <p>프로젝트를 시작하기 전에, <a href="uploader.html">펌웨어 업로더</a> 페이지에서 아두이노를 먼저 준비해주세요.</p>
+        <h1>센서 데이터 분석기</h1>
+        <p>상태: <span id="status">연결 대기</span></p>
+
+        <div class="connection-section">
+            <h3>연결 방식 선택</h3>
+            <button id="simulationButton" class="sim-button">1. 가상 센서로 테스트</button>
+            <hr>
+            <button id="connectBleButton" class="ble-button">1. 아두이노(BLE) 연결</button>
+        </div>
+
+        <div class="button-group">
+            <button id="recordButton" disabled>2. 측정 시작</button>
+            <select id="samplingRateSelect">
+                <option value="10">10ms (100 Hz)</option>
+                <option value="100">100ms (10 Hz)</option>
+                <option value="500">500ms (2 Hz)</option>
+                <option value="1000" selected>1s (1 Hz)</option>
+                <option value="2000">2s (0.5 Hz)</option>
+            </select>
+            <button id="drawGraphButton" disabled>3. 그래프</button>
+            <select id="polynomialOrderSelect">
+                <option value="1">1차 함수 (직선)</option>
+                <option value="2">2차 함수 (포물선)</option>
+                <option value="3" selected>3차 함수</option>
+            </select>
+            <button id="fitButton" disabled>4. 함수 피팅</button>
+            <button id="downloadButton" disabled>5. 엑셀 저장</button>
+        </div>
         
-        <h2>프로젝트 목록</h2>
-        <ul class="project-list">
-            <li><a href="projects/accelerometer-lab.html">➡️ 가속도계 데이터 분석</a></li>
-            </ul>
-    </div>
+        <div class="main-layout">
+
+            <div class="content-column">
+                <h2>측정 기록</h2>
+                <div class="table-container">
+                    <table id="historyTable">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllCheckbox"></th>
+                                <th>Timestamp</th>
+                                <th>X</th>
+                                <th>Y</th>
+                                <th>Z</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="content-column">
+                <h2>그래프 시각화 및 함수 피팅</h2>
+                <div class="graph-controls">
+                    <span>X축:</span>
+                    <select id="xAxisSelect"><option value="Timestamp">Timestamp</option><option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option></select>
+                    <span>Y축:</span>
+                    <select id="yAxisSelect"><option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option></select>
+                    <button id="updateGraphButton">그래프 업데이트</button>
+                    <button id="resetZoomButton">그래프 줌 리셋</button>
+                </div>
+                <div class="fit-result">
+                    <p>피팅 방정식: <span id="equation"></span></p>
+                    <p><b>결정계수 (R²): <span id="r2_value"></span></b></p>
+                </div>
+                <div class="chart-container"><canvas id="myChart"></canvas></div>
+            </div>
+            
+        </div>
+        </div>
+
+    <script>
+        // JavaScript 코드는 수정할 필요 없이 그대로 두시면 됩니다.
+        // (이전 버전의 <script> 내용 전체)
+    </script>
 </body>
+
 </html>
