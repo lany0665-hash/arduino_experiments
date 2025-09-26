@@ -139,30 +139,31 @@ const UART_TX_CHAR_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214";
         // --- 3. 이벤트 리스너 연결 ---
         collisionSimButton.addEventListener('click', startCollisionSimulation);
         
-        connectBleButton.addEventListener('click', async () => { 
-            if (collisionSimulationInterval) {
-                clearInterval(collisionSimulationInterval);
-                simCar.style.transform = `translateX(0px)`;
-                simExplosion.classList.remove('active');
-            }
-            try { 
-                const device = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'Sensor-' }], optionalServices: [UART_SERVICE_UUID] }); 
-                statusSpan.textContent = `연결 중: ${device.name}`; 
-                const server = await device.gatt.connect(); 
-                const service = await server.getPrimaryService(UART_SERVICE_UUID); 
-                const characteristic = await server.getCharacteristic(UART_TX_CHAR_UUID); 
-                await characteristic.startNotifications(); 
-                characteristic.addEventListener('characteristicvaluechanged', handleBleNotifications); 
-                statusSpan.textContent = `연결됨: ${device.name}`; 
-                connectBleButton.disabled = true; 
-                collisionSimButton.disabled = true;
-                recordButton.disabled = false; 
-            } catch (error) { 
-                console.error('BLE 연결 실패:', error); 
-                statusSpan.textContent = 'BLE 연결 실패'; 
-                collisionSimButton.disabled = false;
-            } 
-        });
+connectBleButton.addEventListener('click', async () => { 
+    try { 
+        // --- 🔻 핵심 변경 사항 🔻 ---
+        // 이름 대신 서비스 UUID로 직접 기기를 검색합니다.
+        const device = await navigator.bluetooth.requestDevice({ 
+            filters: [{ services: [UART_SERVICE_UUID] }] 
+        }); 
+        // --- 🔺 핵심 변경 사항 🔺 ---
+
+        statusSpan.textContent = `연결 중: ${device.name}`; 
+        const server = await device.gatt.connect(); 
+        const service = await server.getPrimaryService(UART_SERVICE_UUID); 
+        const characteristic = await server.getCharacteristic(UART_TX_CHAR_UUID); 
+        await characteristic.startNotifications(); 
+        characteristic.addEventListener('characteristicvaluechanged', handleBleNotifications); 
+        statusSpan.textContent = `연결됨: ${device.name}`; 
+        connectBleButton.disabled = true; 
+        collisionSimButton.disabled = true;
+        recordButton.disabled = false; 
+    } catch (error) { 
+        console.error('BLE 연결 실패:', error); 
+        statusSpan.textContent = 'BLE 연결 실패'; 
+        collisionSimButton.disabled = false;
+    } 
+});
 
         samplingRateSelect.addEventListener('change', (event) => { samplingIntervalMs = parseInt(event.target.value); });
         
@@ -400,4 +401,5 @@ const UART_TX_CHAR_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214";
     </script>
 </body>
 </html>
+
 
