@@ -5,7 +5,6 @@
     <title>가속도계 데이터 분석</title>
     
     <link rel="stylesheet" href="../css/style.css">
-    
     <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -138,7 +137,7 @@
         // --- 3. 이벤트 리스너 연결 ---
         collisionSimButton.addEventListener('click', startCollisionSimulation);
         
-        connectBleButton.addEventListener('click', async () => {
+        connectBleButton.addEventListener('click', async () => { 
             try {
                 const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] }); 
                 statusSpan.textContent = `연결 중: ${device.name}`; 
@@ -236,11 +235,84 @@
             if (now - lastGraphUpdateTime > 100) { myChart.update('none'); lastGraphUpdateTime = now; }
         }
 
-        function alignSliderWithChart() { /* 이전과 동일 */ }
+        function alignSliderWithChart() {
+            if (!myChart || !rangeSlider.parentElement) return;
+            const chartArea = myChart.chartArea;
+            if (!chartArea) return;
+            rangeSlider.style.left = `${chartArea.left}px`;
+            rangeSlider.style.width = `${chartArea.width}px`;
+            rangeSlider.style.bottom = `${myChart.height - chartArea.bottom}px`;
+        }
         new ResizeObserver(alignSliderWithChart).observe(chartCanvas);
-        function createOrUpdateSlider() { /* 이전과 동일 */ }
-        function fitPolynomialToRange() { /* 이전과 동일 */ }
-        function downloadSelectedData() { /* 이전과 동일 */ }
+
+        function createOrUpdateSlider() {
+            const colMap = { 'Time': 0, 'X': 1, 'Y': 2, 'Z': 3 }, xAxisColumn = xAxisSelect.value, xIndex = colMap[xAxisColumn];
+            const xData = recordedData.map(row => row[xIndex]);
+            const minX = xData.length > 0 ? Math.min(...xData) : 0;
+            const maxX = xData.length > 0 ? Math.max(...xData) : 1;
+            
+            rangeSlider.style.display = 'block';
+            if (rangeSlider.noUiSlider) {
+                rangeSlider.noUiSlider.updateOptions({ range: { 'min': minX, 'max': maxX }, start: [minX, maxX] });
+            } else {
+                noUiSlider.create(rangeSlider, { start: [minX, maxX], connect: true, range: { 'min': minX, 'max': maxX } });
+            }
+            rangeSlider.noUiSlider.on('update', (values) => {
+                const startVal = parseFloat(values[0]);
+                const endVal = parseFloat(values[1]);
+                rangeValue.textContent = `${startVal.toFixed(3)} ~ ${endVal.toFixed(3)}`;
+                myChart.options.plugins.annotation.annotations.startLine.value = startVal;
+                myChart.options.plugins.annotation.annotations.startLine.display = true;
+                myChart.options.plugins.annotation.annotations.endLine.value = endVal;
+                myChart.options.plugins.annotation.annotations.endLine.display = true;
+                myChart.update('none');
+            });
+            alignSliderWithChart();
+        }
+
+        function fitPolynomialToRange() {
+            if (!rangeSlider.noUiSlider) { alert('먼저 데이터를 측정해주세요.'); return; }
+            const order = parseInt(polynomialOrderSelect.value);
+            const [startStr, endStr] = rangeSlider.noUiSlider.get();
+            const startX = parseFloat(startStr);
+            const endX = parseFloat(endStr);
+            if (startX >= endX) { alert("유효한 범위를 선택해주세요."); return; }
+            
+            const colMap = { 'Time': 0, 'X': 1, 'Y': 2, 'Z': 3 };
+            const xAxisColumn = xAxisSelect.value;
+            const yAxisColumn = yAxisSelect.value;
+            const xIndex = colMap[xAxisColumn];
+            const yIndex = colMap[yAxisColumn];
+            const dataForFitting = recordedData.map(row => {
+                const xValue = row[xIndex];
+                return [xValue, row[yIndex]];
+            }).filter(point => point[0] >= startX && point[0] <= endX);
+            
+            if (dataForFitting.length < order + 1) { alert(`${order}차 함수 피팅을 위해서는 최소 ${order + 1}개의 데이터가 범위 내에 있어야 합니다.`); return; }
+            
+            const result = regression.polynomial(dataForFitting, { order: order, precision: 5 });
+            equationSpan.textContent = result.string;
+            r2ValueSpan.textContent = result.r2.toFixed(4);
+            const fittedPoints = result.points.map(p => ({x: p[0], y: p[1]}));
+            myChart.data.datasets[1].data = fittedPoints;
+            myChart.data.datasets[1].label = `${order}차 피팅 (R²=${result.r2.toFixed(4)})`;
+            myChart.update();
+        }
+
+        function downloadSelectedData() {
+            if (recordedData.length === 0) { alert("저장할 데이터가 없습니다."); return; }
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            csvContent += "Time(s),X,Y,Z\r\n";
+            recordedData.forEach(rowArray => { csvContent += rowArray.map(val => typeof val === 'number' ? val.toFixed(4) : val).join(",") + "\r\n"; });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "sensor_data.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
         function startCollisionSimulation() { /* 이전과 동일 */ }
     </script>
 </body>
