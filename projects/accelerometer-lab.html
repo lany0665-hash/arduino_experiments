@@ -6,6 +6,7 @@
     
     <link rel="stylesheet" href="../css/style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" rel="stylesheet">
+    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/regression/2.0.1/regression.min.js"></script>
@@ -14,39 +15,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
     
     <style>
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-        .header-controls {
-            display: flex;
-            gap: 10px;
-        }
-        .table-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
-        .table-controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        .checkbox-group { 
-            display: flex; 
-            align-items: center; 
-            gap: 15px; 
-            flex-wrap: wrap; 
-        }
-        .checkbox-group label { 
-            display: flex; 
-            align-items: center; 
-            gap: 5px; 
-            cursor: pointer; 
-        }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .header-controls { display: flex; gap: 10px; }
+        .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .table-controls { display: flex; gap: 10px; align-items: center; }
+        .checkbox-group { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        .checkbox-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -124,7 +98,7 @@
     <script>
         // --- 1. UI 요소 및 전역 변수 선언 ---
         const connectBleButton = document.getElementById('connectBleButton');
-        const disconnectBleButton = document.getElementById('disconnectBleButton'); // 🔹 추가
+        const disconnectBleButton = document.getElementById('disconnectBleButton');
         const recordButton = document.getElementById('recordButton');
         const downloadButton = document.getElementById('downloadButton');
         const fitButton = document.getElementById('fitButton');
@@ -146,7 +120,7 @@
         let samplingIntervalMs = 10;
         let myChart;
         let commandCharacteristic;
-        let bleDevice; // 🔹 추가: 연결된 디바이스 객체 저장
+        let bleDevice;
 
         const UART_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
@@ -163,15 +137,36 @@
         const COL_MAP = { 'Time': 0, 'X': 1, 'Y': 2, 'Z': 3, 'Total': 4 };
 
         // --- 2. 차트 초기화 ---
+        // --- 🔻 [수정] 데이터셋 구조를 미리 정의 ---
         myChart = new Chart(chartCanvas, {
             type: 'scatter',
-            data: { /* ... 이전과 동일 ... */ },
-            options: { /* ... 이전과 동일 ... */ }
+            data: {
+                datasets: [
+                    { label: 'X', data: [], backgroundColor: DATASET_MAP.X.color },
+                    { label: 'Y', data: [], backgroundColor: DATASET_MAP.Y.color },
+                    { label: 'Z', data: [], backgroundColor: DATASET_MAP.Z.color },
+                    { label: 'Total', data: [], backgroundColor: DATASET_MAP.Total.color, hidden: true }, // Total은 기본적으로 숨김
+                    { label: '함수 피팅', data: [], borderColor: DATASET_MAP.Fit.color, type: 'line', fill: false, tension: 0.1, pointRadius: 0 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: { x: { type: 'linear', title: { display: true, text: 'Time (s)' } }, y: { title: { display: true, text: 'Acceleration (g)' } } },
+                plugins: {
+                    zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } },
+                    annotation: {
+                        annotations: {
+                            startLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false },
+                            endLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false }
+                        }
+                    }
+                }
+            }
         });
 
         // --- 3. 이벤트 리스너 연결 ---
         connectBleButton.addEventListener('click', connectBLE);
-        disconnectBleButton.addEventListener('click', disconnectBLE); // 🔹 추가
+        disconnectBleButton.addEventListener('click', disconnectBLE);
         samplingRateSelect.addEventListener('change', handleRateChange);
         recordButton.addEventListener('click', toggleRecording);
         resetZoomButton.addEventListener('click', () => myChart.resetZoom());
@@ -183,8 +178,8 @@
         async function connectBLE() {
             try {
                 const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] }); 
-                bleDevice = device; // 🔹 디바이스 객체 저장
-                bleDevice.addEventListener('gattserverdisconnected', onDisconnected); // 🔹 연결 해제 이벤트 리스너
+                bleDevice = device;
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
                 statusSpan.textContent = `연결 중: ${device.name}`; 
                 const server = await device.gatt.connect(); 
@@ -205,21 +200,19 @@
             } 
         }
 
-        // 🔹 추가: 연결 해제 함수
         function disconnectBLE() {
             if (bleDevice && bleDevice.gatt.connected) {
                 bleDevice.gatt.disconnect();
             }
         }
 
-        // 🔹 추가: 연결이 끊어졌을 때 UI를 초기화하는 함수
         function onDisconnected() {
             statusSpan.textContent = '연결 해제됨';
             connectBleButton.style.display = 'inline-block';
             disconnectBleButton.style.display = 'none';
             recordButton.disabled = true;
             if (isRecording) {
-                toggleRecording(); // 측정 중이었다면 강제 중지
+                toggleRecording();
             }
             bleDevice = null;
         }
@@ -263,9 +256,6 @@
             }
         }
 
-        // 이하 handleBleNotifications, updateGraphData, fitPolynomialToRange 등
-        // 데이터 처리 및 그래프 관련 함수들은 이전 코드와 동일하게 작동합니다.
-        // ... (이전 코드와 동일한 나머지 함수들) ...
         function handleBleNotifications(event) {
             if (!isRecording) return;
             const batchString = new TextDecoder().decode(event.target.value);
