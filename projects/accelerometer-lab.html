@@ -5,6 +5,7 @@
     <title>가속도계 데이터 분석</title>
     
     <link rel="stylesheet" href="../css/style.css">
+    
     <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -36,9 +37,9 @@
         <div class="button-group">
             <button id="recordButton" disabled>2. 측정 시작</button>
             <select id="samplingRateSelect">
-                <option value="5">5ms (200 Hz)</option>
-                <option value="10" selected>10ms (100 Hz)</option>
-                <option value="50">50ms (20 Hz)</option>
+                <option value="200">5ms (200 Hz)</option>
+                <option value="100" selected>10ms (100 Hz)</option>
+                <option value="20">50ms (20 Hz)</option>
             </select>
             <button id="downloadButton" disabled>3. 엑셀 저장</button>
         </div>
@@ -137,7 +138,7 @@
         // --- 3. 이벤트 리스너 연결 ---
         collisionSimButton.addEventListener('click', startCollisionSimulation);
         
-        connectBleButton.addEventListener('click', async () => { 
+        connectBleButton.addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] }); 
                 statusSpan.textContent = `연결 중: ${device.name}`; 
@@ -159,7 +160,8 @@
         });
 
         samplingRateSelect.addEventListener('change', (event) => {
-            samplingIntervalMs = parseInt(event.target.value);
+            const selectedHz = parseInt(event.target.value);
+            samplingIntervalMs = 1000 / selectedHz;
             sendRateCommand();
         });
         
@@ -205,9 +207,14 @@
         function handleBleNotifications(event) { 
             const value = event.target.value;
             const decoder = new TextDecoder('utf-8');
-            const dataString = decoder.decode(value);
-            const [x, y, z] = dataString.split(',');
-            processAndDisplayData(x, y, z);
+            const batchString = decoder.decode(value);
+            const dataPackets = batchString.split(';');
+            dataPackets.forEach(packet => {
+                if (packet) {
+                    const [x, y, z] = packet.split(',');
+                    processAndDisplayData(x, y, z);
+                }
+            });
         }
         
         function processAndDisplayData(x, y, z) {
@@ -313,7 +320,9 @@
             document.body.removeChild(link);
         }
 
-        function startCollisionSimulation() { /* 이전과 동일 */ }
+        function startCollisionSimulation() {
+            // This function can be filled with the previous simulation logic if needed
+        }
     </script>
 </body>
 </html>
