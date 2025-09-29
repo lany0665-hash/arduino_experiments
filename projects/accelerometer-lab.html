@@ -12,6 +12,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    <style>
+        /* 체크박스 그룹 스타일 추가 */
+        .checkbox-group { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        .checkbox-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -24,12 +29,6 @@
             <button id="collisionSimButton" class="sim-button">1. 자동차 충돌 시뮬레이션 시작</button>
             <hr>
             <button id="connectBleButton" class="ble-button">1. 아두이노(BLE) 연결</button>
-        </div>
-
-        <div class="simulation-area">
-            <div class="car" id="simCar">CAR</div>
-            <div class="explosion" id="simExplosion"></div>
-            <div class="wall"></div>
         </div>
 
         <div class="button-group">
@@ -47,7 +46,7 @@
                 <h2>측정 기록</h2>
                 <div class="table-container">
                     <table id="historyTable">
-                        <thead><tr><th>Time (s)</th><th>X</th><th>Y</th><th>Z</th></tr></thead>
+                        <thead><tr><th>Time (s)</th><th>X</th><th>Y</th><th>Z</th><th>Total</th></tr></thead>
                         <tbody id="historyTbody"></tbody>
                     </table>
                 </div>
@@ -59,15 +58,24 @@
                     <div id="range-slider" style="display:none;"></div>
                 </div>
                 <div class="graph-controls">
-                    <span>X축:</span>
-                    <select id="xAxisSelect"><option value="Time">Time (s)</option><option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option></select>
-                    <span>Y축:</span>
-                    <select id="yAxisSelect"><option value="X">X</option><option value="Y">Y</option><option value="Z">Z</option></select>
-                    <button id="resetZoomButton">줌 리셋</button>
+                    <span>Y축 선택:</span>
+                    <div id="yAxisCheckboxGroup" class="checkbox-group">
+                        <label><input type="checkbox" name="yAxis" value="X" checked> X</label>
+                        <label><input type="checkbox" name="yAxis" value="Y" checked> Y</label>
+                        <label><input type="checkbox" name="yAxis" value="Z" checked> Z</label>
+                        <label><input type="checkbox" name="yAxis" value="Total"> Total</label>
+                    </div>
+                    <button id="resetZoomButton" style="margin-left: auto;">줌 리셋</button>
                 </div>
                  <div class="graph-controls fit-controls">
                     <span>피팅 범위: <b id="range-value"></b></span>
-                    <select id="polynomialOrderSelect" style="margin-left: auto;">
+                    <select id="fitTargetSelect" style="margin-left: auto;">
+                        <option value="X">X 기준</option>
+                        <option value="Y">Y 기준</option>
+                        <option value="Z">Z 기준</option>
+                        <option value="Total">Total 기준</option>
+                    </select>
+                    <select id="polynomialOrderSelect">
                         <option value="1">1차</option><option value="2">2차</option><option value="3" selected>3차</option>
                     </select>
                     <button id="fitButton" disabled>함수 피팅</button>
@@ -83,7 +91,6 @@
     <script>
         // --- 1. UI 요소 및 전역 변수 선언 ---
         const connectBleButton = document.getElementById('connectBleButton');
-        const collisionSimButton = document.getElementById('collisionSimButton');
         const recordButton = document.getElementById('recordButton');
         const downloadButton = document.getElementById('downloadButton');
         const fitButton = document.getElementById('fitButton');
@@ -91,35 +98,49 @@
         const equationSpan = document.getElementById('equation');
         const r2ValueSpan = document.getElementById('r2_value');
         const historyTbody = document.getElementById('historyTbody');
-        const xAxisSelect = document.getElementById('xAxisSelect');
-        const yAxisSelect = document.getElementById('yAxisSelect');
+        const yAxisCheckboxGroup = document.getElementById('yAxisCheckboxGroup');
         const samplingRateSelect = document.getElementById('samplingRateSelect');
         const resetZoomButton = document.getElementById('resetZoomButton');
         const chartCanvas = document.getElementById('myChart');
         const polynomialOrderSelect = document.getElementById('polynomialOrderSelect');
+        const fitTargetSelect = document.getElementById('fitTargetSelect');
         const rangeSlider = document.getElementById('range-slider');
         const rangeValue = document.getElementById('range-value');
-        const simCar = document.getElementById('simCar');
-        const simExplosion = document.getElementById('simExplosion');
 
         let recordedData = []; 
         let isRecording = false;
-        let samplingIntervalMs = 10; // 웹에서 선택한 샘플링 간격(ms)
+        let samplingIntervalMs = 10;
         let myChart;
-        let lastGraphUpdateTime = 0;
         let commandCharacteristic;
 
         const UART_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
         const UART_CMD_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
+        
+        // 🔹 데이터셋 인덱스 및 색상 맵
+        const DATASET_MAP = {
+            'X': { index: 0, color: 'rgba(255, 99, 132, 0.8)' },
+            'Y': { index: 1, color: 'rgba(54, 162, 235, 0.8)' },
+            'Z': { index: 2, color: 'rgba(75, 192, 192, 0.8)' },
+            'Total': { index: 3, color: 'rgba(153, 102, 255, 0.8)' },
+            'Fit': { index: 4, color: 'rgba(255, 159, 64, 1)' }
+        };
 
         // --- 2. 차트 초기화 ---
         myChart = new Chart(chartCanvas, {
             type: 'scatter',
-            data: { datasets: [{ label: '원본 데이터', data: [], backgroundColor: 'rgba(75, 192, 192, 0.6)', pointRadius: 3 }, { label: '함수 피팅', data: [], borderColor: 'rgba(255, 99, 132, 1)', type: 'line', fill: false, tension: 0.1, pointRadius: 0 }] },
+            data: {
+                datasets: [
+                    { label: 'X', data: [], borderColor: DATASET_MAP.X.color, backgroundColor: DATASET_MAP.X.color, showLine: true, tension: 0.1, pointRadius: 1 },
+                    { label: 'Y', data: [], borderColor: DATASET_MAP.Y.color, backgroundColor: DATASET_MAP.Y.color, showLine: true, tension: 0.1, pointRadius: 1 },
+                    { label: 'Z', data: [], borderColor: DATASET_MAP.Z.color, backgroundColor: DATASET_MAP.Z.color, showLine: true, tension: 0.1, pointRadius: 1 },
+                    { label: 'Total', data: [], borderColor: DATASET_MAP.Total.color, backgroundColor: DATASET_MAP.Total.color, showLine: true, tension: 0.1, pointRadius: 1, hidden: true },
+                    { label: '함수 피팅', data: [], borderColor: DATASET_MAP.Fit.color, type: 'line', fill: false, tension: 0.1, pointRadius: 0 }
+                ]
+            },
             options: {
-                responsive: true, maintainAspectRatio: false, 
-                scales: { x: { type: 'linear', position: 'bottom', title: { display: true, text: 'Time (s)' } }, y: { title: { display: true, text: 'Y-Axis' } } },
+                responsive: true, maintainAspectRatio: false,
+                scales: { x: { type: 'linear', position: 'bottom', title: { display: true, text: 'Time (s)' } }, y: { title: { display: true, text: 'Acceleration (G)' } } },
                 plugins: {
                     zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } },
                     annotation: {
@@ -133,9 +154,16 @@
         });
 
         // --- 3. 이벤트 리스너 연결 ---
-        collisionSimButton.addEventListener('click', startCollisionSimulation);
-        
-        connectBleButton.addEventListener('click', async () => {
+        connectBleButton.addEventListener('click', connectBLE);
+        samplingRateSelect.addEventListener('change', handleRateChange);
+        recordButton.addEventListener('click', toggleRecording);
+        resetZoomButton.addEventListener('click', () => myChart.resetZoom());
+        fitButton.addEventListener('click', fitPolynomialToRange);
+        downloadButton.addEventListener('click', downloadData);
+        yAxisCheckboxGroup.addEventListener('change', updateGraphVisibility);
+
+        // --- 4. 함수 정의 ---
+        async function connectBLE() {
             try {
                 const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] }); 
                 statusSpan.textContent = `연결 중: ${device.name}`; 
@@ -147,33 +175,42 @@
                 dataCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotifications); 
                 statusSpan.textContent = `연결됨: ${device.name}`; 
                 connectBleButton.disabled = true; 
-                collisionSimButton.disabled = true;
                 recordButton.disabled = false;
-                sendRateCommand();
+                handleRateChange(); // 초기 샘플링 속도 전송
             } catch (error) { 
                 console.error('BLE 연결 실패:', error); 
                 statusSpan.textContent = 'BLE 연결 실패'; 
             } 
-        });
+        }
 
-        samplingRateSelect.addEventListener('change', (event) => {
-            const selectedHz = parseInt(event.target.value);
+        function handleRateChange() {
+            const selectedHz = parseInt(samplingRateSelect.value);
             if (selectedHz === 200) samplingIntervalMs = 5;
             else if (selectedHz === 100) samplingIntervalMs = 10;
             else if (selectedHz === 25) samplingIntervalMs = 40;
-            
             sendRateCommand();
-        });
-        
-        recordButton.addEventListener('click', () => {
+        }
+
+        async function sendRateCommand() {
+            if (!commandCharacteristic) return;
+            const command = `SET_RATE:${samplingRateSelect.value}`;
+            try {
+                await commandCharacteristic.writeValue(new TextEncoder().encode(command));
+            } catch (error) { console.error(`명령 전송 실패: ${command}`, error); }
+        }
+
+        function toggleRecording() {
             isRecording = !isRecording;
             if (isRecording) {
-                recordedData = []; historyTbody.innerHTML = ''; 
-                myChart.data.datasets[0].data = []; myChart.data.datasets[1].data = []; myChart.update('none');
+                recordedData = []; historyTbody.innerHTML = '';
+                Object.values(DATASET_MAP).forEach(d => {
+                    if (myChart.data.datasets[d.index]) myChart.data.datasets[d.index].data = [];
+                });
+                myChart.update('none');
                 equationSpan.textContent = ''; r2ValueSpan.textContent = ''; 
                 recordButton.textContent = '측정 중지'; recordButton.style.backgroundColor = '#DC3545'; 
                 downloadButton.disabled = true; fitButton.disabled = true;
-                if (rangeSlider.noUiSlider) { rangeSlider.noUiSlider.destroy(); }
+                if (rangeSlider.noUiSlider) rangeSlider.noUiSlider.destroy();
                 rangeSlider.style.display = 'none';
                 statusSpan.textContent = '측정 중...';
             } else {
@@ -183,91 +220,60 @@
                     createOrUpdateSlider(); 
                 }
             }
-        });
-        
-        resetZoomButton.addEventListener('click', () => myChart.resetZoom());
-        fitButton.addEventListener('click', fitPolynomialToRange);
-        downloadButton.addEventListener('click', downloadSelectedData);
-        xAxisSelect.addEventListener('change', () => { updateGraphAxes(); if(rangeSlider.noUiSlider) createOrUpdateSlider(); });
-        yAxisSelect.addEventListener('change', updateGraphAxes);
-        
-        // --- 4. 함수 정의 ---
-        async function sendRateCommand() {
-            if (!commandCharacteristic) return;
-            const rate = samplingRateSelect.value;
-            const command = `SET_RATE:${rate}`;
-            try {
-                await commandCharacteristic.writeValue(new TextEncoder().encode(command));
-                console.log(`Command sent: ${command}`);
-            } catch (error) {
-                console.error(`Failed to send command: ${command}`, error);
-            }
         }
 
         function handleBleNotifications(event) {
             if (!isRecording) return;
-
-            const value = event.target.value;
-            const decoder = new TextDecoder('utf-8');
-            const batchString = decoder.decode(value);
-
-            const dataPackets = batchString.split(';').filter(packet => packet.length > 0);
+            const batchString = new TextDecoder().decode(event.target.value);
+            const dataPackets = batchString.split(';').filter(p => p);
 
             dataPackets.forEach(packet => {
-                const [x, y, z] = packet.split(',');
-                
+                const [xStr, yStr, zStr] = packet.split(',');
+                const x = parseFloat(xStr), y = parseFloat(yStr), z = parseFloat(zStr);
+                // 🔹 전체 가속도 크기 계산
+                const total = Math.sqrt(x*x + y*y + z*z);
                 const elapsedTime = (recordedData.length * samplingIntervalMs) / 1000.0;
                 
-                const currentData = [elapsedTime, parseFloat(x), parseFloat(y), parseFloat(z)];
+                // 🔹 Total을 포함하여 데이터 저장
+                const currentData = [elapsedTime, x, y, z, total];
                 recordedData.push(currentData);
 
+                // 🔹 Total을 포함하여 테이블 행 추가
                 const newRow = historyTbody.insertRow(0);
-                newRow.innerHTML = `<td>${currentData[0].toFixed(3)}</td><td>${currentData[1].toFixed(4)}</td><td>${currentData[2].toFixed(4)}</td><td>${currentData[3].toFixed(4)}</td>`;
+                newRow.innerHTML = `<td>${elapsedTime.toFixed(3)}</td><td>${x.toFixed(4)}</td><td>${y.toFixed(4)}</td><td>${z.toFixed(4)}</td><td>${total.toFixed(4)}</td>`;
             });
 
-            updateGraphAxes();
+            updateGraphData();
         }
         
-        function updateGraphAxes() {
-            const colMap = { 'Time': 0, 'X': 1, 'Y': 2, 'Z': 3 };
-            const xAxisColumn = xAxisSelect.value;
-            const yAxisColumn = yAxisSelect.value;
-            const xIndex = colMap[xAxisColumn];
-            const yIndex = colMap[yAxisColumn];
+        function updateGraphData() {
+            const timeData = recordedData.map(row => row[0]);
+            const xData = recordedData.map(row => row[1]);
+            const yData = recordedData.map(row => row[2]);
+            const zData = recordedData.map(row => row[3]);
+            const totalData = recordedData.map(row => row[4]);
 
-            const scatterData = recordedData.map(row => ({ x: row[xIndex], y: row[yIndex] }));
+            myChart.data.datasets[DATASET_MAP.X.index].data = timeData.map((t, i) => ({x: t, y: xData[i]}));
+            myChart.data.datasets[DATASET_MAP.Y.index].data = timeData.map((t, i) => ({x: t, y: yData[i]}));
+            myChart.data.datasets[DATASET_MAP.Z.index].data = timeData.map((t, i) => ({x: t, y: zData[i]}));
+            myChart.data.datasets[DATASET_MAP.Total.index].data = timeData.map((t, i) => ({x: t, y: totalData[i]}));
             
-            myChart.data.datasets[0].data = scatterData;
-            myChart.options.scales.x.title.text = xAxisColumn;
-            myChart.options.scales.y.title.text = yAxisColumn;
-            
-            const now = Date.now();
-            if (now - lastGraphUpdateTime > 100) { 
-                myChart.update('none'); 
-                lastGraphUpdateTime = now; 
-            }
+            myChart.update('none');
         }
 
-        function alignSliderWithChart() {
-            if (!myChart || !rangeSlider.parentElement) return;
-            const chartArea = myChart.chartArea;
-            if (!chartArea) return;
-            rangeSlider.style.position = 'absolute';
-            rangeSlider.style.left = `${chartArea.left}px`;
-            rangeSlider.style.width = `${chartArea.width}px`;
-            // 슬라이더 위치를 x축 바로 아래에 오도록 조정
-            rangeSlider.style.bottom = `${myChart.height - chartArea.bottom - 5}px`; 
+        function updateGraphVisibility() {
+            const checkboxes = yAxisCheckboxGroup.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                const datasetIndex = DATASET_MAP[cb.value].index;
+                myChart.data.datasets[datasetIndex].hidden = !cb.checked;
+            });
+            myChart.update();
         }
-        new ResizeObserver(alignSliderWithChart).observe(chartCanvas.parentElement);
-
 
         function createOrUpdateSlider() {
-            const colMap = { 'Time': 0, 'X': 1, 'Y': 2, 'Z': 3 }, xAxisColumn = xAxisSelect.value, xIndex = colMap[xAxisColumn];
-            const xData = recordedData.map(row => row[xIndex]);
+            const xData = recordedData.map(row => row[0]);
             if (xData.length === 0) return;
-
-            const minX = Math.min(...xData);
-            const maxX = Math.max(...xData);
+            const minX = Math.min(...xData), maxX = Math.max(...xData);
             
             rangeSlider.style.display = 'block';
             if (rangeSlider.noUiSlider) {
@@ -276,8 +282,7 @@
                 noUiSlider.create(rangeSlider, { start: [minX, maxX], connect: true, range: { 'min': minX, 'max': maxX } });
             }
             rangeSlider.noUiSlider.on('update', (values) => {
-                const startVal = parseFloat(values[0]);
-                const endVal = parseFloat(values[1]);
+                const [startVal, endVal] = [parseFloat(values[0]), parseFloat(values[1])];
                 rangeValue.textContent = `${startVal.toFixed(3)} ~ ${endVal.toFixed(3)}`;
                 myChart.options.plugins.annotation.annotations.startLine.value = startVal;
                 myChart.options.plugins.annotation.annotations.startLine.display = true;
@@ -285,53 +290,49 @@
                 myChart.options.plugins.annotation.annotations.endLine.display = true;
                 myChart.update('none');
             });
-            alignSliderWithChart();
         }
 
         function fitPolynomialToRange() {
-            if (!rangeSlider.noUiSlider) { alert('먼저 데이터를 측정해주세요.'); return; }
+            if (!rangeSlider.noUiSlider) { alert('데이터를 먼저 측정해주세요.'); return; }
             const order = parseInt(polynomialOrderSelect.value);
-            const [startStr, endStr] = rangeSlider.noUiSlider.get();
-            const startX = parseFloat(startStr);
-            const endX = parseFloat(endStr);
+            const [startX, endX] = rangeSlider.noUiSlider.get().map(parseFloat);
             if (startX >= endX) { alert("유효한 범위를 선택해주세요."); return; }
             
-            const colMap = { 'Time': 0, 'X': 1, 'Y': 2, 'Z': 3 };
-            const xAxisColumn = xAxisSelect.value;
-            const yAxisColumn = yAxisSelect.value;
-            const xIndex = colMap[xAxisColumn];
-            const yIndex = colMap[yAxisColumn];
-            const dataForFitting = recordedData.map(row => {
-                return [row[xIndex], row[yIndex]];
-            }).filter(point => point[0] >= startX && point[0] <= endX);
+            // 🔹 피팅할 데이터 축 선택
+            const fitTarget = fitTargetSelect.value;
+            const colMap = { 'Time': 0, 'X': 1, 'Y': 2, 'Z': 3, 'Total': 4 };
+            const yIndex = colMap[fitTarget];
+
+            const dataForFitting = recordedData
+                .filter(row => row[0] >= startX && row[0] <= endX)
+                .map(row => [row[0], row[yIndex]]);
             
-            if (dataForFitting.length < order + 1) { alert(`${order}차 함수 피팅을 위해서는 최소 ${order + 1}개의 데이터가 범위 내에 있어야 합니다.`); return; }
+            if (dataForFitting.length < order + 1) { alert(`${order}차 함수 피팅을 위해 최소 ${order + 1}개의 데이터가 필요합니다.`); return; }
             
             const result = regression.polynomial(dataForFitting, { order: order, precision: 5 });
             equationSpan.textContent = result.string;
             r2ValueSpan.textContent = result.r2.toFixed(4);
-            const fittedPoints = result.points.map(p => ({x: p[0], y: p[1]}));
-            myChart.data.datasets[1].data = fittedPoints;
-            myChart.data.datasets[1].label = `${order}차 피팅 (R²=${result.r2.toFixed(4)})`;
+            
+            const fitDataset = myChart.data.datasets[DATASET_MAP.Fit.index];
+            fitDataset.data = result.points.map(p => ({x: p[0], y: p[1]}));
+            fitDataset.label = `${fitTarget} ${order}차 피팅 (R²=${result.r2.toFixed(4)})`;
             myChart.update();
         }
 
-        function downloadSelectedData() {
+        function downloadData() {
             if (recordedData.length === 0) { alert("저장할 데이터가 없습니다."); return; }
             let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-            csvContent += "Time(s),X,Y,Z\r\n";
-            recordedData.forEach(rowArray => { csvContent += rowArray.map(val => typeof val === 'number' ? val.toFixed(4) : val).join(",") + "\r\n"; });
-            const encodedUri = encodeURI(csvContent);
+            // 🔹 CSV 헤더에 Total 추가
+            csvContent += "Time(s),X,Y,Z,Total\r\n";
+            recordedData.forEach(row => { 
+                csvContent += row.map(val => val.toFixed(4)).join(",") + "\r\n"; 
+            });
             const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
+            link.setAttribute("href", encodeURI(csvContent));
             link.setAttribute("download", "sensor_data.csv");
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-        }
-
-        function startCollisionSimulation() {
-            // 필요시 시뮬레이션 로직 추가
         }
     </script>
 </body>
