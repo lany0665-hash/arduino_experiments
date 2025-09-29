@@ -70,7 +70,7 @@
                     <div id="yAxisCheckboxGroup" class="checkbox-group">
                         <label><input type="checkbox" name="yAxis" value="X" checked> X</label>
                         <label><input type="checkbox" name="yAxis" value="Y" checked> Y</label>
-                        <label><input type="checkbox" name="yAxis" value="Z" checked> Z</label>
+                        <label><input type="checkbox" name="yAxis" value="Z"> Z</label>
                         <label><input type="checkbox" name="yAxis" value="Total"> Total</label>
                     </div>
                     <div class="slider-group" style="margin-left: auto;">
@@ -80,7 +80,7 @@
                     </div>
                     <button id="resetZoomButton">줌 리셋</button>
                 </div>
-                <div class="graph-controls fit-controls">
+                 <div class="graph-controls fit-controls">
                     <span>피팅 범위: <b id="range-value"></b></span>
                     <select id="fitTargetSelect" style="margin-left: auto;">
                         <option value="X">X 기준</option>
@@ -120,11 +120,9 @@
         const fitTargetSelect = document.getElementById('fitTargetSelect');
         const rangeSlider = document.getElementById('range-slider');
         const rangeValue = document.getElementById('range-value');
-        // --- 🔻 핵심 변경 사항 2: 새 UI 요소 가져오기 🔻 ---
         const pointSizeSlider = document.getElementById('pointSizeSlider');
         const pointSizeValue = document.getElementById('pointSizeValue');
         const showLineCheckbox = document.getElementById('showLineCheckbox');
-        // --- 🔺 핵심 변경 사항 2 🔺 ---
 
         let recordedData = []; 
         let isRecording = false;
@@ -148,7 +146,7 @@
                 datasets: [
                     { label: 'X', data: [], backgroundColor: DATASET_COLORS[0], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[0] },
                     { label: 'Y', data: [], backgroundColor: DATASET_COLORS[1], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[1] },
-                    { label: 'Z', data: [], backgroundColor: DATASET_COLORS[2], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[2] },
+                    { label: 'Z', data: [], backgroundColor: DATASET_COLORS[2], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[2], hidden: true },
                     { label: 'Total', data: [], backgroundColor: DATASET_COLORS[3], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[3], hidden: true },
                     { label: '함수 피팅', data: [], borderColor: DATASET_COLORS[4], type: 'line', fill: false, tension: 0.1, pointRadius: 0 }
                 ]
@@ -165,7 +163,6 @@
         fitButton.addEventListener('click', fitPolynomialToRange);
         downloadButton.addEventListener('click', downloadData);
         yAxisCheckboxGroup.addEventListener('change', updateGraphVisibility);
-        // --- 🔻 핵심 변경 사항 3: 새 이벤트 리스너 추가 🔻 ---
         pointSizeSlider.addEventListener('input', (event) => {
             const newSize = parseFloat(event.target.value);
             pointSizeValue.textContent = newSize;
@@ -181,7 +178,7 @@
             }
             myChart.update();
         });
-        // --- 🔺 핵심 변경 사항 3 🔺 ---
+
 
         // --- 4. 함수 정의 ---
         async function connectBLE() {
@@ -189,7 +186,6 @@
                 const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] }); 
                 bleDevice = device;
                 bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-
                 statusSpan.textContent = `연결 중: ${device.name}`; 
                 const server = await device.gatt.connect(); 
                 const service = await server.getPrimaryService(UART_SERVICE_UUID); 
@@ -197,7 +193,6 @@
                 commandCharacteristic = await service.getCharacteristic(UART_CMD_CHAR_UUID);
                 await dataCharacteristic.startNotifications(); 
                 dataCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotifications); 
-                
                 statusSpan.textContent = `연결됨: ${device.name}`; 
                 connectBleButton.style.display = 'none';
                 disconnectBleButton.style.display = 'inline-block';
@@ -209,44 +204,17 @@
             } 
         }
 
-        function disconnectBLE() {
-            if (bleDevice && bleDevice.gatt.connected) {
-                bleDevice.gatt.disconnect();
-            }
-        }
-
-        function onDisconnected() {
-            statusSpan.textContent = '연결 해제됨';
-            connectBleButton.style.display = 'inline-block';
-            disconnectBleButton.style.display = 'none';
-            recordButton.disabled = true;
-            if (isRecording) {
-                toggleRecording();
-            }
-            bleDevice = null;
-        }
-
-        function handleRateChange() {
-            const selectedHz = parseInt(samplingRateSelect.value);
-            if (selectedHz === 200) samplingIntervalMs = 5;
-            else if (selectedHz === 100) samplingIntervalMs = 10;
-            else if (selectedHz === 25) samplingIntervalMs = 40;
-            sendRateCommand();
-        }
-
-        async function sendRateCommand() {
-            if (!commandCharacteristic || !bleDevice || !bleDevice.gatt.connected) return;
-            const command = `SET_RATE:${samplingRateSelect.value}`;
-            try { await commandCharacteristic.writeValue(new TextEncoder().encode(command)); } 
-            catch (error) { console.error(`명령 전송 실패: ${command}`, error); }
-        }
+        function disconnectBLE() { if (bleDevice && bleDevice.gatt.connected) { bleDevice.gatt.disconnect(); } }
+        function onDisconnected() { statusSpan.textContent = '연결 해제됨'; connectBleButton.style.display = 'inline-block'; disconnectBleButton.style.display = 'none'; recordButton.disabled = true; if (isRecording) { toggleRecording(); } bleDevice = null; }
+        function handleRateChange() { const selectedHz = parseInt(samplingRateSelect.value); if (selectedHz === 200) samplingIntervalMs = 5; else if (selectedHz === 100) samplingIntervalMs = 10; else if (selectedHz === 25) samplingIntervalMs = 40; sendRateCommand(); }
+        async function sendRateCommand() { if (!commandCharacteristic || !bleDevice || !bleDevice.gatt.connected) return; const command = `SET_RATE:${samplingRateSelect.value}`; try { await commandCharacteristic.writeValue(new TextEncoder().encode(command)); } catch (error) { console.error(`명령 전송 실패: ${command}`, error); } }
 
         function toggleRecording() {
             isRecording = !isRecording;
             if (isRecording) {
                 recordedData = []; historyTbody.innerHTML = '';
-                Object.values(DATASET_MAP).forEach(d => {
-                    if (myChart.data.datasets[d.index]) myChart.data.datasets[d.index].data = [];
+                Object.values(DATASET_MAP).forEach(index => {
+                    if (myChart.data.datasets[index]) myChart.data.datasets[index].data = [];
                 });
                 myChart.update('none');
                 equationSpan.textContent = ''; r2ValueSpan.textContent = ''; 
@@ -269,15 +237,12 @@
             if (!isRecording) return;
             const batchString = new TextDecoder().decode(event.target.value);
             const dataPackets = batchString.split(';').filter(p => p);
-
             dataPackets.forEach(packet => {
                 const [xStr, yStr, zStr] = packet.split(',');
                 if (xStr === undefined || yStr === undefined || zStr === undefined) return;
-
                 const x = parseFloat(xStr), y = parseFloat(yStr), z = parseFloat(zStr);
                 const total = Math.sqrt(x*x + y*y + z*z);
                 const elapsedTime = (recordedData.length * samplingIntervalMs) / 1000.0;
-                
                 const currentData = [];
                 currentData[COL_MAP.Time] = elapsedTime;
                 currentData[COL_MAP.X] = x;
@@ -285,28 +250,28 @@
                 currentData[COL_MAP.Z] = z;
                 currentData[COL_MAP.Total] = total;
                 recordedData.push(currentData);
-
                 const newRow = historyTbody.insertRow(0);
                 newRow.innerHTML = `<td>${elapsedTime.toFixed(3)}</td><td>${x.toFixed(4)}</td><td>${y.toFixed(4)}</td><td>${z.toFixed(4)}</td><td>${total.toFixed(4)}</td>`;
             });
-
             updateGraphData();
         }
         
         function updateGraphData() {
             const timeData = recordedData.map(row => row[COL_MAP.Time]);
             
-            myChart.data.datasets[DATASET_MAP.X.index].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.X]}));
-            myChart.data.datasets[DATASET_MAP.Y.index].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.Y]}));
-            myChart.data.datasets[DATASET_MAP.Z.index].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.Z]}));
-            myChart.data.datasets[DATASET_MAP.Total.index].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.Total]}));
+            // --- 🔻 [수정] 데이터셋 업데이트 방식 변경 ---
+            myChart.data.datasets[DATASET_MAP.X].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.X]}));
+            myChart.data.datasets[DATASET_MAP.Y].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.Y]}));
+            myChart.data.datasets[DATASET_MAP.Z].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.Z]}));
+            myChart.data.datasets[DATASET_MAP.Total].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.Total]}));
             
             myChart.update('none');
         }
 
         function updateGraphVisibility() {
             yAxisCheckboxGroup.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                myChart.data.datasets[DATASET_MAP[cb.value].index].hidden = !cb.checked;
+                // --- 🔻 [수정] 데이터셋 가시성 제어 방식 변경 ---
+                myChart.data.datasets[DATASET_MAP[cb.value]].hidden = !cb.checked;
             });
             myChart.update();
         }
@@ -352,7 +317,7 @@
             equationSpan.textContent = result.string;
             r2ValueSpan.textContent = result.r2.toFixed(4);
             
-            const fitDataset = myChart.data.datasets[DATASET_MAP.Fit.index];
+            const fitDataset = myChart.data.datasets[DATASET_MAP.Fit];
             fitDataset.data = result.points.map(p => ({x: p[0], y: p[1]}));
             fitDataset.label = `${fitTarget} ${order}차 피팅 (R²=${result.r2.toFixed(4)})`;
             myChart.update();
@@ -375,4 +340,3 @@
     </script>
 </body>
 </html>
-
