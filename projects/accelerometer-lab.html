@@ -21,6 +21,7 @@
         .table-controls { display: flex; gap: 10px; align-items: center; }
         .checkbox-group { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
         .checkbox-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+        .slider-group { display: flex; align-items: center; gap: 10px; }
     </style>
 </head>
 <body>
@@ -72,9 +73,14 @@
                         <label><input type="checkbox" name="yAxis" value="Z" checked> Z</label>
                         <label><input type="checkbox" name="yAxis" value="Total"> Total</label>
                     </div>
-                    <button id="resetZoomButton" style="margin-left: auto;">줌 리셋</button>
+                    <div class="slider-group" style="margin-left: auto;">
+                        <label for="pointSizeSlider">점 크기: <span id="pointSizeValue">3</span>px</label>
+                        <input type="range" id="pointSizeSlider" min="0" max="10" value="3" step="0.5">
+                        <label><input type="checkbox" id="showLineCheckbox"> 선 연결</label>
+                    </div>
+                    <button id="resetZoomButton">줌 리셋</button>
                 </div>
-                 <div class="graph-controls fit-controls">
+                <div class="graph-controls fit-controls">
                     <span>피팅 범위: <b id="range-value"></b></span>
                     <select id="fitTargetSelect" style="margin-left: auto;">
                         <option value="X">X 기준</option>
@@ -114,6 +120,11 @@
         const fitTargetSelect = document.getElementById('fitTargetSelect');
         const rangeSlider = document.getElementById('range-slider');
         const rangeValue = document.getElementById('range-value');
+        // --- 🔻 핵심 변경 사항 2: 새 UI 요소 가져오기 🔻 ---
+        const pointSizeSlider = document.getElementById('pointSizeSlider');
+        const pointSizeValue = document.getElementById('pointSizeValue');
+        const showLineCheckbox = document.getElementById('showLineCheckbox');
+        // --- 🔺 핵심 변경 사항 2 🔺 ---
 
         let recordedData = []; 
         let isRecording = false;
@@ -126,42 +137,23 @@
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
         const UART_CMD_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
         
-        const DATASET_MAP = {
-            'X': { index: 0, color: 'rgba(255, 99, 132, 0.8)' },
-            'Y': { index: 1, color: 'rgba(54, 162, 235, 0.8)' },
-            'Z': { index: 2, color: 'rgba(75, 192, 192, 0.8)' },
-            'Total': { index: 3, color: 'rgba(153, 102, 255, 0.8)' },
-            'Fit': { index: 4, color: 'rgba(255, 159, 64, 1)' }
-        };
-        
+        const DATASET_MAP = { 'X': 0, 'Y': 1, 'Z': 2, 'Total': 3, 'Fit': 4 };
+        const DATASET_COLORS = ['rgba(255, 99, 132, 0.8)', 'rgba(54, 162, 235, 0.8)', 'rgba(75, 192, 192, 0.8)', 'rgba(153, 102, 255, 0.8)', 'rgba(255, 159, 64, 1)'];
         const COL_MAP = { 'Time': 0, 'X': 1, 'Y': 2, 'Z': 3, 'Total': 4 };
 
         // --- 2. 차트 초기화 ---
-        // --- 🔻 [수정] 데이터셋 구조를 미리 정의 ---
         myChart = new Chart(chartCanvas, {
             type: 'scatter',
             data: {
                 datasets: [
-                    { label: 'X', data: [], backgroundColor: DATASET_MAP.X.color },
-                    { label: 'Y', data: [], backgroundColor: DATASET_MAP.Y.color },
-                    { label: 'Z', data: [], backgroundColor: DATASET_MAP.Z.color },
-                    { label: 'Total', data: [], backgroundColor: DATASET_MAP.Total.color, hidden: true }, // Total은 기본적으로 숨김
-                    { label: '함수 피팅', data: [], borderColor: DATASET_MAP.Fit.color, type: 'line', fill: false, tension: 0.1, pointRadius: 0 }
+                    { label: 'X', data: [], backgroundColor: DATASET_COLORS[0], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[0] },
+                    { label: 'Y', data: [], backgroundColor: DATASET_COLORS[1], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[1] },
+                    { label: 'Z', data: [], backgroundColor: DATASET_COLORS[2], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[2] },
+                    { label: 'Total', data: [], backgroundColor: DATASET_COLORS[3], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[3], hidden: true },
+                    { label: '함수 피팅', data: [], borderColor: DATASET_COLORS[4], type: 'line', fill: false, tension: 0.1, pointRadius: 0 }
                 ]
             },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                scales: { x: { type: 'linear', title: { display: true, text: 'Time (s)' } }, y: { title: { display: true, text: 'Acceleration (g)' } } },
-                plugins: {
-                    zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } },
-                    annotation: {
-                        annotations: {
-                            startLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false },
-                            endLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false }
-                        }
-                    }
-                }
-            }
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'linear', title: { display: true, text: 'Time (s)' } }, y: { title: { display: true, text: 'Acceleration (g)' } } }, plugins: { zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } }, annotation: { annotations: { startLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false }, endLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false } } } } }
         });
 
         // --- 3. 이벤트 리스너 연결 ---
@@ -173,6 +165,23 @@
         fitButton.addEventListener('click', fitPolynomialToRange);
         downloadButton.addEventListener('click', downloadData);
         yAxisCheckboxGroup.addEventListener('change', updateGraphVisibility);
+        // --- 🔻 핵심 변경 사항 3: 새 이벤트 리스너 추가 🔻 ---
+        pointSizeSlider.addEventListener('input', (event) => {
+            const newSize = parseFloat(event.target.value);
+            pointSizeValue.textContent = newSize;
+            for (let i = 0; i <= DATASET_MAP.Total; i++) {
+                myChart.data.datasets[i].pointRadius = newSize;
+            }
+            myChart.update('none');
+        });
+        showLineCheckbox.addEventListener('change', (event) => {
+            const showLine = event.target.checked;
+            for (let i = 0; i <= DATASET_MAP.Total; i++) {
+                myChart.data.datasets[i].showLine = showLine;
+            }
+            myChart.update();
+        });
+        // --- 🔺 핵심 변경 사항 3 🔺 ---
 
         // --- 4. 함수 정의 ---
         async function connectBLE() {
@@ -366,3 +375,4 @@
     </script>
 </body>
 </html>
+
