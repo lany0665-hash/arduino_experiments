@@ -5,9 +5,7 @@
     <title>가속도계 데이터 분석</title>
     
     <link rel="stylesheet" href="../css/style.css">
-    
     <link href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" rel="stylesheet">
-    
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/regression/2.0.1/regression.min.js"></script>
@@ -39,7 +37,7 @@
             <select id="samplingRateSelect">
                 <option value="200">5ms (200 Hz)</option>
                 <option value="100" selected>10ms (100 Hz)</option>
-                <option value="20">50ms (20 Hz)</option>
+                <option value="25">40ms (25 Hz)</option>
             </select>
             <button id="downloadButton" disabled>3. 엑셀 저장</button>
         </div>
@@ -106,8 +104,7 @@
 
         let recordedData = []; 
         let isRecording = false;
-        let collisionSimulationInterval;
-        let samplingIntervalMs = 10;
+        let samplingIntervalMs = 10; // 웹에서 선택한 샘플링 간격(ms)
         let myChart;
         let lastGraphUpdateTime = 0;
         let commandCharacteristic;
@@ -122,7 +119,7 @@
             data: { datasets: [{ label: '원본 데이터', data: [], backgroundColor: 'rgba(75, 192, 192, 0.6)', pointRadius: 3 }, { label: '함수 피팅', data: [], borderColor: 'rgba(255, 99, 132, 1)', type: 'line', fill: false, tension: 0.1, pointRadius: 0 }] },
             options: {
                 responsive: true, maintainAspectRatio: false, 
-                scales: { x: { type: 'linear', title: { display: true, text: 'Time (s)' } }, y: { title: { display: true, text: 'Y-Axis' } } },
+                scales: { x: { type: 'linear', position: 'bottom', title: { display: true, text: 'Time (s)' } }, y: { title: { display: true, text: 'Y-Axis' } } },
                 plugins: {
                     zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } },
                     annotation: {
@@ -161,7 +158,10 @@
 
         samplingRateSelect.addEventListener('change', (event) => {
             const selectedHz = parseInt(event.target.value);
-            samplingIntervalMs = 1000 / selectedHz;
+            if (selectedHz === 200) samplingIntervalMs = 5;
+            else if (selectedHz === 100) samplingIntervalMs = 10;
+            else if (selectedHz === 25) samplingIntervalMs = 40;
+            
             sendRateCommand();
         });
         
@@ -204,28 +204,28 @@
             }
         }
 
-        function handleBleNotifications(event) { 
+        function handleBleNotifications(event) {
+            if (!isRecording) return;
+
             const value = event.target.value;
             const decoder = new TextDecoder('utf-8');
             const batchString = decoder.decode(value);
-            const dataPackets = batchString.split(';');
+
+            const dataPackets = batchString.split(';').filter(packet => packet.length > 0);
+
             dataPackets.forEach(packet => {
-                if (packet) {
-                    const [x, y, z] = packet.split(',');
-                    processAndDisplayData(x, y, z);
-                }
-            });
-        }
-        
-        function processAndDisplayData(x, y, z) {
-            if (isRecording) {
+                const [x, y, z] = packet.split(',');
+                
                 const elapsedTime = (recordedData.length * samplingIntervalMs) / 1000.0;
+                
                 const currentData = [elapsedTime, parseFloat(x), parseFloat(y), parseFloat(z)];
                 recordedData.push(currentData);
+
                 const newRow = historyTbody.insertRow(0);
                 newRow.innerHTML = `<td>${currentData[0].toFixed(3)}</td><td>${currentData[1].toFixed(4)}</td><td>${currentData[2].toFixed(4)}</td><td>${currentData[3].toFixed(4)}</td>`;
-                updateGraphAxes();
-            }
+            });
+
+            updateGraphAxes();
         }
         
         function updateGraphAxes() {
@@ -234,29 +234,40 @@
             const yAxisColumn = yAxisSelect.value;
             const xIndex = colMap[xAxisColumn];
             const yIndex = colMap[yAxisColumn];
+
             const scatterData = recordedData.map(row => ({ x: row[xIndex], y: row[yIndex] }));
+            
             myChart.data.datasets[0].data = scatterData;
             myChart.options.scales.x.title.text = xAxisColumn;
             myChart.options.scales.y.title.text = yAxisColumn;
+            
             const now = Date.now();
-            if (now - lastGraphUpdateTime > 100) { myChart.update('none'); lastGraphUpdateTime = now; }
+            if (now - lastGraphUpdateTime > 100) { 
+                myChart.update('none'); 
+                lastGraphUpdateTime = now; 
+            }
         }
 
         function alignSliderWithChart() {
             if (!myChart || !rangeSlider.parentElement) return;
             const chartArea = myChart.chartArea;
             if (!chartArea) return;
+            rangeSlider.style.position = 'absolute';
             rangeSlider.style.left = `${chartArea.left}px`;
             rangeSlider.style.width = `${chartArea.width}px`;
-            rangeSlider.style.bottom = `${myChart.height - chartArea.bottom}px`;
+            // 슬라이더 위치를 x축 바로 아래에 오도록 조정
+            rangeSlider.style.bottom = `${myChart.height - chartArea.bottom - 5}px`; 
         }
-        new ResizeObserver(alignSliderWithChart).observe(chartCanvas);
+        new ResizeObserver(alignSliderWithChart).observe(chartCanvas.parentElement);
+
 
         function createOrUpdateSlider() {
             const colMap = { 'Time': 0, 'X': 1, 'Y': 2, 'Z': 3 }, xAxisColumn = xAxisSelect.value, xIndex = colMap[xAxisColumn];
             const xData = recordedData.map(row => row[xIndex]);
-            const minX = xData.length > 0 ? Math.min(...xData) : 0;
-            const maxX = xData.length > 0 ? Math.max(...xData) : 1;
+            if (xData.length === 0) return;
+
+            const minX = Math.min(...xData);
+            const maxX = Math.max(...xData);
             
             rangeSlider.style.display = 'block';
             if (rangeSlider.noUiSlider) {
@@ -291,8 +302,7 @@
             const xIndex = colMap[xAxisColumn];
             const yIndex = colMap[yAxisColumn];
             const dataForFitting = recordedData.map(row => {
-                const xValue = row[xIndex];
-                return [xValue, row[yIndex]];
+                return [row[xIndex], row[yIndex]];
             }).filter(point => point[0] >= startX && point[0] <= endX);
             
             if (dataForFitting.length < order + 1) { alert(`${order}차 함수 피팅을 위해서는 최소 ${order + 1}개의 데이터가 범위 내에 있어야 합니다.`); return; }
@@ -321,7 +331,7 @@
         }
 
         function startCollisionSimulation() {
-            // This function can be filled with the previous simulation logic if needed
+            // 필요시 시뮬레이션 로직 추가
         }
     </script>
 </body>
