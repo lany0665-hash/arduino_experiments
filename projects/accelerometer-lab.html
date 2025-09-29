@@ -151,7 +151,35 @@
                     { label: '함수 피팅', data: [], borderColor: DATASET_COLORS[4], type: 'line', fill: false, tension: 0.1, pointRadius: 0 }
                 ]
             },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'linear', title: { display: true, text: 'Time (s)' } }, y: { title: { display: true, text: 'Acceleration (g)' } } }, plugins: { zoom: { pan: { enabled: true, mode: 'xy' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } }, annotation: { annotations: { startLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false }, endLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false } } } } }
+            options: { 
+                responsive: true, maintainAspectRatio: false, 
+                scales: { 
+                    x: { type: 'linear', title: { display: true, text: 'Time (s)' } }, 
+                    y: { title: { display: true, text: 'Acceleration (g)' } } 
+                },
+                plugins: {
+                    zoom: { 
+                        // --- 🔻 핵심 변경 사항 🔻 ---
+                        pan: { 
+                            enabled: true, 
+                            mode: 'x', // 기본 드래그는 X축만 이동
+                            modifierKey: 'shift', // Shift 키를 누르고 드래그하면 Y축 이동
+                        }, 
+                        // --- 🔺 핵심 변경 사항 🔺 ---
+                        zoom: { 
+                            wheel: { enabled: true }, 
+                            pinch: { enabled: true }, 
+                            mode: 'xy' // 확대/축소는 X, Y축 모두 적용
+                        } 
+                    }, 
+                    annotation: { 
+                        annotations: { 
+                            startLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false }, 
+                            endLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false } 
+                        } 
+                    } 
+                } 
+            }
         });
 
         // --- 3. 이벤트 리스너 연결 ---
@@ -178,6 +206,7 @@
             }
             myChart.update();
         });
+
 
 
         // --- 4. 함수 정의 ---
@@ -340,3 +369,4 @@
     </script>
 </body>
 </html>
+
