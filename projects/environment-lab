@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>환경 센서 모니터</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .sensor-readout { text-align: center; font-size: 2em; margin: 20px; }
+        .sensor-readout span { font-weight: bold; color: #007BFF; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../index.html">&laquo; 메인 페이지로 돌아가기</a>
+        <h1>환경 센서 실시간 모니터</h1>
+        <p>상태: <span id="status">연결 대기</span></p>
+        <button id="connectBleButton" class="ble-button">아두이노 연결</button>
+        <button id="disconnectBleButton" class="ble-button" style="display:none; background-color:#6c757d;">연결 해제</button>
+        
+        <div class="sensor-readout">온도: <span id="temp-value">--</span> °C</div>
+        <div class="sensor-readout">습도: <span id="humidity-value">--</span> %</div>
+        <div class="sensor-readout">조도: <span id="light-value">--</span></div>
+    </div>
+
+    <script>
+        const connectBleButton = document.getElementById('connectBleButton');
+        const disconnectBleButton = document.getElementById('disconnectBleButton');
+        const statusSpan = document.getElementById('status');
+        const tempValue = document.getElementById('temp-value');
+        const humidityValue = document.getElementById('humidity-value');
+        const lightValue = document.getElementById('light-value');
+        
+        let bleDevice, commandCharacteristic;
+
+        const UART_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
+        const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
+        const UART_CMD_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
+
+        connectBleButton.addEventListener('click', async () => {
+            try {
+                const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] });
+                bleDevice = device;
+                device.addEventListener('gattserverdisconnected', onDisconnected);
+                statusSpan.textContent = `연결 중: ${device.name}`;
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(UART_SERVICE_UUID);
+                const dataCharacteristic = await service.getCharacteristic(UART_TX_CHAR_UUID);
+                commandCharacteristic = await service.getCharacteristic(UART_CMD_CHAR_UUID);
+                
+                await dataCharacteristic.startNotifications();
+                dataCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+                
+                // 연결 성공 시, '환경 센서 데이터 요청' 명령 전송
+                await commandCharacteristic.writeValue(new TextEncoder().encode("START:ENV"));
+
+                statusSpan.textContent = `연결됨: ${device.name}`;
+                connectBleButton.style.display = 'none';
+                disconnectBleButton.style.display = 'inline-block';
+            } catch(error) {
+                statusSpan.textContent = '연결 실패';
+                console.error(error);
+            }
+        });
+
+        disconnectBleButton.addEventListener('click', async () => {
+            if (bleDevice && bleDevice.gatt.connected) {
+                await commandCharacteristic.writeValue(new TextEncoder().encode("STOP"));
+                bleDevice.gatt.disconnect();
+            }
+        });
+
+        function onDisconnected() {
+            statusSpan.textContent = '연결 해제됨';
+            connectBleButton.style.display = 'inline-block';
+            disconnectBleButton.style.display = 'none';
+            tempValue.textContent = '--';
+            humidityValue.textContent = '--';
+            lightValue.textContent = '--';
+        }
+
+        function handleNotifications(event) {
+            const value = new TextDecoder().decode(event.target.value);
+            try {
+                const json = JSON.parse(value);
+                if (json.type === 'env') {
+                    tempValue.textContent = json.data.temp.toFixed(2);
+                    humidityValue.textContent = json.data.humidity.toFixed(2);
+                    lightValue.textContent = json.data.light;
+                }
+            } catch(e) {
+                console.error("Invalid JSON:", value);
+            }
+        }
+    </script>
+</body>
+</html>
