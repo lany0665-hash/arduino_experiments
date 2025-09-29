@@ -117,7 +117,6 @@
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
         const UART_CMD_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
         
-        // 🔹 데이터셋 인덱스 및 색상 맵
         const DATASET_MAP = {
             'X': { index: 0, color: 'rgba(255, 99, 132, 0.8)' },
             'Y': { index: 1, color: 'rgba(54, 162, 235, 0.8)' },
@@ -134,7 +133,7 @@
                     { label: 'X', data: [], borderColor: DATASET_MAP.X.color, backgroundColor: DATASET_MAP.X.color, showLine: true, tension: 0.1, pointRadius: 1 },
                     { label: 'Y', data: [], borderColor: DATASET_MAP.Y.color, backgroundColor: DATASET_MAP.Y.color, showLine: true, tension: 0.1, pointRadius: 1 },
                     { label: 'Z', data: [], borderColor: DATASET_MAP.Z.color, backgroundColor: DATASET_MAP.Z.color, showLine: true, tension: 0.1, pointRadius: 1 },
-                    { label: 'Total', data: [], borderColor: DATASET_MAP.Total.color, backgroundColor: DATASET_MAP.Total.color, showLine: true, tension: 0.1, pointRadius: 1, hidden: true },
+                    { label: 'Total', data: [], borderColor: DATASET_MAP.Total.color, backgroundColor: DATASET_MAP.Total.color, showLine: true, tension: 0.1, pointRadius: 1 },
                     { label: '함수 피팅', data: [], borderColor: DATASET_MAP.Fit.color, type: 'line', fill: false, tension: 0.1, pointRadius: 0 }
                 ]
             },
@@ -152,6 +151,9 @@
                 }
             }
         });
+        
+        // 🔹 변경점: 페이지 로드 시 그래프 표시 상태를 체크박스와 동기화
+        updateGraphVisibility();
 
         // --- 3. 이벤트 리스너 연결 ---
         connectBleButton.addEventListener('click', connectBLE);
@@ -176,7 +178,7 @@
                 statusSpan.textContent = `연결됨: ${device.name}`; 
                 connectBleButton.disabled = true; 
                 recordButton.disabled = false;
-                handleRateChange(); // 초기 샘플링 속도 전송
+                handleRateChange();
             } catch (error) { 
                 console.error('BLE 연결 실패:', error); 
                 statusSpan.textContent = 'BLE 연결 실패'; 
@@ -230,19 +232,15 @@
             dataPackets.forEach(packet => {
                 const [xStr, yStr, zStr] = packet.split(',');
                 const x = parseFloat(xStr), y = parseFloat(yStr), z = parseFloat(zStr);
-                // 🔹 전체 가속도 크기 계산
                 const total = Math.sqrt(x*x + y*y + z*z);
                 const elapsedTime = (recordedData.length * samplingIntervalMs) / 1000.0;
                 
-                // 🔹 Total을 포함하여 데이터 저장
                 const currentData = [elapsedTime, x, y, z, total];
                 recordedData.push(currentData);
 
-                // 🔹 Total을 포함하여 테이블 행 추가
                 const newRow = historyTbody.insertRow(0);
                 newRow.innerHTML = `<td>${elapsedTime.toFixed(3)}</td><td>${x.toFixed(4)}</td><td>${y.toFixed(4)}</td><td>${z.toFixed(4)}</td><td>${total.toFixed(4)}</td>`;
             });
-
             updateGraphData();
         }
         
@@ -298,7 +296,6 @@
             const [startX, endX] = rangeSlider.noUiSlider.get().map(parseFloat);
             if (startX >= endX) { alert("유효한 범위를 선택해주세요."); return; }
             
-            // 🔹 피팅할 데이터 축 선택
             const fitTarget = fitTargetSelect.value;
             const colMap = { 'Time': 0, 'X': 1, 'Y': 2, 'Z': 3, 'Total': 4 };
             const yIndex = colMap[fitTarget];
@@ -322,7 +319,6 @@
         function downloadData() {
             if (recordedData.length === 0) { alert("저장할 데이터가 없습니다."); return; }
             let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-            // 🔹 CSV 헤더에 Total 추가
             csvContent += "Time(s),X,Y,Z,Total\r\n";
             recordedData.forEach(row => { 
                 csvContent += row.map(val => val.toFixed(4)).join(",") + "\r\n"; 
