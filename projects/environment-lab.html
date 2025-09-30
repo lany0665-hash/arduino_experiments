@@ -3,10 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <title>환경 센서 모니터</title>
+    
     <link rel="stylesheet" href="../css/style.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <style>
-        .sensor-readout { text-align: center; font-size: 2em; margin: 20px; }
-        .sensor-readout span { font-weight: bold; color: #007BFF; }
+        /* 이 페이지에만 적용되는 추가 스타일 */
+        .sensor-readout-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .sensor-readout {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .sensor-readout h3 {
+            margin-top: 0;
+            font-size: 1.2em;
+            color: #495057;
+        }
+        .sensor-readout .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #007BFF;
+        }
     </style>
 </head>
 <body>
@@ -17,25 +43,79 @@
         <button id="connectBleButton" class="ble-button">아두이노 연결</button>
         <button id="disconnectBleButton" class="ble-button" style="display:none; background-color:#6c757d;">연결 해제</button>
         
-        <div class="sensor-readout">온도: <span id="temp-value">--</span> °C</div>
-        <div class="sensor-readout">습도: <span id="humidity-value">--</span> %</div>
-        <div class="sensor-readout">조도: <span id="light-value">--</span></div>
+        <div class="sensor-readout-grid">
+            <div class="sensor-readout">
+                <h3>🌡️ 온도</h3>
+                <p><span id="temp-value" class="value">--</span> °C</p>
+            </div>
+            <div class="sensor-readout">
+                <h3>💧 습도</h3>
+                <p><span id="humidity-value" class="value">--</span> %</p>
+            </div>
+            <div class="sensor-readout">
+                <h3>☀️ 조도</h3>
+                <p><span id="light-value" class="value">--</span></p>
+            </div>
+        </div>
+
+        <div class="main-layout">
+            <div class="content-column">
+                <h2>실시간 데이터 로그</h2>
+                <div class="table-container">
+                    <table id="historyTable">
+                        <thead><tr><th>Time (s)</th><th>온도 (°C)</th><th>습도 (%)</th><th>조도</th></tr></thead>
+                        <tbody id="historyTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="content-column">
+                <h2>실시간 변화 그래프</h2>
+                <div class="chart-container" style="height: 485px;"><canvas id="myChart"></canvas></div>
+            </div>
+        </div>
     </div>
 
     <script>
+        // --- 1. UI 요소 및 전역 변수 선언 ---
         const connectBleButton = document.getElementById('connectBleButton');
         const disconnectBleButton = document.getElementById('disconnectBleButton');
         const statusSpan = document.getElementById('status');
         const tempValue = document.getElementById('temp-value');
         const humidityValue = document.getElementById('humidity-value');
         const lightValue = document.getElementById('light-value');
+        const historyTbody = document.getElementById('historyTbody');
+        const chartCanvas = document.getElementById('myChart');
         
         let bleDevice, commandCharacteristic;
-
+        let recordedData = [];
+        let myChart;
+        
         const UART_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
         const UART_CMD_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
 
+        // --- 2. 차트 초기화 ---
+        myChart = new Chart(chartCanvas, {
+            type: 'line',
+            data: {
+                labels: [], // X축 (시간)
+                datasets: [
+                    { label: '온도 (°C)', data: [], borderColor: 'rgba(255, 99, 132, 1)', yAxisID: 'y' },
+                    { label: '습도 (%)', data: [], borderColor: 'rgba(54, 162, 235, 1)', yAxisID: 'y' },
+                    { label: '조도', data: [], borderColor: 'rgba(255, 206, 86, 1)', yAxisID: 'y1', hidden: true } // 조도는 스케일이 달라 별도 축 사용
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { title: { display: true, text: '시간 (s)' } },
+                    y: { type: 'linear', position: 'left', title: { display: true, text: '온도/습도' } },
+                    y1: { type: 'linear', position: 'right', title: { display: true, text: '조도' }, grid: { drawOnChartArea: false } }
+                }
+            }
+        });
+
+        // --- 3. 이벤트 리스너 연결 ---
         connectBleButton.addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] });
@@ -52,7 +132,7 @@
                 
                 // 연결 성공 시, '환경 센서 데이터 요청' 명령 전송
                 await commandCharacteristic.writeValue(new TextEncoder().encode("START:ENV"));
-
+                
                 statusSpan.textContent = `연결됨: ${device.name}`;
                 connectBleButton.style.display = 'none';
                 disconnectBleButton.style.display = 'inline-block';
@@ -69,6 +149,7 @@
             }
         });
 
+        // --- 4. 함수 정의 ---
         function onDisconnected() {
             statusSpan.textContent = '연결 해제됨';
             connectBleButton.style.display = 'inline-block';
@@ -83,9 +164,31 @@
             try {
                 const json = JSON.parse(value);
                 if (json.type === 'env') {
-                    tempValue.textContent = json.data.temp.toFixed(2);
-                    humidityValue.textContent = json.data.humidity.toFixed(2);
-                    lightValue.textContent = json.data.light;
+                    const data = json.data;
+                    const elapsedTime = (recordedData.length * 1).toFixed(1); // 1초 간격
+
+                    // 1. 현재 값 업데이트
+                    tempValue.textContent = data.temp.toFixed(2);
+                    humidityValue.textContent = data.humidity.toFixed(2);
+                    lightValue.textContent = data.light;
+
+                    // 2. 데이터 배열 및 테이블에 추가
+                    recordedData.push(data);
+                    const newRow = historyTbody.insertRow(0);
+                    newRow.innerHTML = `<td>${elapsedTime}</td><td>${data.temp.toFixed(2)}</td><td>${data.humidity.toFixed(2)}</td><td>${data.light}</td>`;
+
+                    // 3. 그래프 업데이트
+                    myChart.data.labels.push(elapsedTime);
+                    myChart.data.datasets[0].data.push(data.temp);
+                    myChart.data.datasets[1].data.push(data.humidity);
+                    myChart.data.datasets[2].data.push(data.light);
+                    
+                    // 그래프에 데이터가 너무 많아지면 앞부분을 잘라냄 (최대 60개)
+                    if (myChart.data.labels.length > 60) {
+                        myChart.data.labels.shift();
+                        myChart.data.datasets.forEach(dataset => dataset.data.shift());
+                    }
+                    myChart.update('none');
                 }
             } catch(e) {
                 console.error("Invalid JSON:", value);
