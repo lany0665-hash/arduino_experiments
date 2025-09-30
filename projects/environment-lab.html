@@ -19,7 +19,7 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
+        <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <a href="../index.html">&laquo; 메인 페이지로 돌아가기</a>
                 <h1>환경 센서 실시간 모니터</h1>
@@ -30,18 +30,17 @@
                 <button id="disconnectBleButton" class="ble-button" style="display:none; background-color:#6c757d;">연결 해제</button>
             </div>
         </div>
-
         <div class="table-header">
-             <h2>실시간 현황</h2>
-             <div class="table-controls">
-                <button id="recordButton" disabled>측정 시작</button>
-                <span>샘플링 속도:</span>
-                <select id="samplingRateSelect">
-                    <option value="1000" selected>1s</option>
-                    <option value="2000">2s</option>
-                    <option value="5000">5s</option>
-                </select>
-                </div>
+              <h2>실시간 현황</h2>
+              <div class="table-controls">
+                  <button id="recordButton" disabled>측정 시작</button>
+                  <span>샘플링 속도:</span>
+                  <select id="samplingRateSelect">
+                      <option value="1000" selected>1s</option>
+                      <option value="2000">2s</option>
+                      <option value="5000">5s</option>
+                  </select>
+                  </div>
         </div>
         
         <div class="sensor-readout-grid">
