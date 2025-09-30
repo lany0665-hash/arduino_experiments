@@ -9,7 +9,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
-        /* 이 페이지에만 적용되는 추가 스타일 */
         .sensor-readout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
         .sensor-readout { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; text-align: center; }
         .sensor-readout h3 { margin-top: 0; font-size: 1.2em; color: #495057; }
@@ -35,13 +34,14 @@
         <div class="table-header">
              <h2>실시간 현황</h2>
              <div class="table-controls">
+                <button id="recordButton" disabled>측정 시작</button>
                 <span>샘플링 속도:</span>
                 <select id="samplingRateSelect">
                     <option value="1000" selected>1s</option>
                     <option value="2000">2s</option>
                     <option value="5000">5s</option>
                 </select>
-            </div>
+                </div>
         </div>
         
         <div class="sensor-readout-grid">
@@ -102,11 +102,13 @@
         const chartCanvas = document.getElementById('myChart');
         const yAxisCheckboxGroup = document.getElementById('yAxisCheckboxGroup');
         const samplingRateSelect = document.getElementById('samplingRateSelect');
+        const recordButton = document.getElementById('recordButton'); // 새로 추가
         
         let bleDevice, commandCharacteristic;
         let recordedData = [];
         let myChart;
         let envIntervalMs = 1000;
+        let isRecording = false; // 새로 추가
         
         const UART_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
@@ -117,29 +119,15 @@
         // --- 2. 차트 초기화 ---
         myChart = new Chart(chartCanvas, {
             type: 'line',
-            data: {
-                labels: [],
-                datasets: [
-                    { label: '온도 (°C)', data: [], borderColor: 'rgba(255, 99, 132, 1)', yAxisID: 'y' },
-                    { label: '습도 (%)', data: [], borderColor: 'rgba(54, 162, 235, 1)', yAxisID: 'y' },
-                    { label: '압력 (kPa)', data: [], borderColor: 'rgba(153, 102, 255, 1)', yAxisID: 'y', hidden: true },
-                    { label: '조도', data: [], borderColor: 'rgba(255, 206, 86, 1)', yAxisID: 'y1', hidden: true }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                scales: {
-                    x: { title: { display: true, text: '시간 (s)' } },
-                    y: { type: 'linear', position: 'left', title: { display: true, text: '온도/습도/압력' } },
-                    y1: { type: 'linear', position: 'right', title: { display: true, text: '조도' }, grid: { drawOnChartArea: false } }
-                }
-            }
+            data: { labels: [], datasets: [ { label: '온도 (°C)', data: [], borderColor: 'rgba(255, 99, 132, 1)', yAxisID: 'y' }, { label: '습도 (%)', data: [], borderColor: 'rgba(54, 162, 235, 1)', yAxisID: 'y' }, { label: '압력 (kPa)', data: [], borderColor: 'rgba(153, 102, 255, 1)', yAxisID: 'y', hidden: true }, { label: '조도', data: [], borderColor: 'rgba(255, 206, 86, 1)', yAxisID: 'y1', hidden: true } ] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: '시간 (s)' } }, y: { type: 'linear', position: 'left', title: { display: true, text: '온도/습도/압력' } }, y1: { type: 'linear', position: 'right', title: { display: true, text: '조도' }, grid: { drawOnChartArea: false } } } }
         });
 
         // --- 3. 이벤트 리스너 연결 ---
         connectBleButton.addEventListener('click', connectBLE);
         disconnectBleButton.addEventListener('click', disconnectBLE);
         samplingRateSelect.addEventListener('change', handleRateChange);
+        recordButton.addEventListener('click', toggleRecording); // 새로 추가
         yAxisCheckboxGroup.addEventListener('change', (event) => {
             const checkbox = event.target;
             const datasetIndex = DATASET_MAP[checkbox.value];
@@ -152,7 +140,7 @@
             try {
                 const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] });
                 bleDevice = device;
-                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+                device.addEventListener('gattserverdisconnected', onDisconnected);
                 statusSpan.textContent = `연결 중: ${device.name}`;
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(UART_SERVICE_UUID);
@@ -168,6 +156,7 @@
                 statusSpan.textContent = `연결됨: ${device.name}`;
                 connectBleButton.style.display = 'none';
                 disconnectBleButton.style.display = 'inline-block';
+                recordButton.disabled = false; // 연결 시 측정 버튼 활성화
             } catch(error) {
                 statusSpan.textContent = '연결 실패';
                 console.error(error);
@@ -176,6 +165,7 @@
         
         async function disconnectBLE() {
             if (bleDevice && bleDevice.gatt.connected) {
+                if(isRecording) toggleRecording(); // 측정 중이면 중지
                 await commandCharacteristic.writeValue(new TextEncoder().encode("STOP"));
                 bleDevice.gatt.disconnect();
             }
@@ -185,16 +175,35 @@
             statusSpan.textContent = '연결 해제됨';
             connectBleButton.style.display = 'inline-block';
             disconnectBleButton.style.display = 'none';
-            tempValue.textContent = '--';
-            humidityValue.textContent = '--';
-            pressureValue.textContent = '--';
-            lightValue.textContent = '--';
+            recordButton.disabled = true;
+            tempValue.textContent = '--'; humidityValue.textContent = '--'; pressureValue.textContent = '--'; lightValue.textContent = '--';
         }
 
         async function handleRateChange() {
             envIntervalMs = parseInt(samplingRateSelect.value);
             if (bleDevice && bleDevice.gatt.connected) {
                 await commandCharacteristic.writeValue(new TextEncoder().encode(`SET_ENV_RATE:${envIntervalMs}`));
+            }
+        }
+        
+        // --- 🔻 핵심 변경 사항 2: 측정 토글 함수 추가 🔻 ---
+        function toggleRecording() {
+            isRecording = !isRecording;
+            if (isRecording) {
+                // 측정 시작 시 초기화
+                recordedData = [];
+                historyTbody.innerHTML = '';
+                myChart.data.labels = [];
+                myChart.data.datasets.forEach(dataset => dataset.data = []);
+                myChart.update('none');
+
+                recordButton.textContent = '측정 중지';
+                recordButton.style.backgroundColor = '#DC3545';
+                statusSpan.textContent = `측정 중... (${envIntervalMs/1000}s 간격)`;
+            } else {
+                recordButton.textContent = '측정 시작';
+                recordButton.style.backgroundColor = '#28A745';
+                statusSpan.textContent = `측정 완료 (총 ${recordedData.length}개 데이터)`;
             }
         }
 
@@ -204,30 +213,34 @@
                 const json = JSON.parse(value);
                 if (json.type === 'env') {
                     const data = json.data;
-                    const elapsedTime = (recordedData.length * (envIntervalMs/1000.0)).toFixed(1);
 
+                    // 현재 값은 항상 업데이트
                     tempValue.textContent = data.temp.toFixed(2);
                     humidityValue.textContent = data.humidity.toFixed(2);
                     pressureValue.textContent = data.pressure.toFixed(2);
                     lightValue.textContent = data.light;
                     
-                    const newData = { time: parseFloat(elapsedTime), ...data };
-                    recordedData.push(newData);
-                    
-                    const newRow = historyTbody.insertRow(0);
-                    newRow.innerHTML = `<td>${elapsedTime}</td><td>${data.temp.toFixed(2)}</td><td>${data.humidity.toFixed(2)}</td><td>${data.pressure.toFixed(2)}</td><td>${data.light}</td>`;
+                    // 측정 중일 때만 데이터 기록 및 그래프 업데이트
+                    if (isRecording) {
+                        const elapsedTime = (recordedData.length * (envIntervalMs/1000.0)).toFixed(1);
+                        const newData = { time: parseFloat(elapsedTime), ...data };
+                        recordedData.push(newData);
+                        
+                        const newRow = historyTbody.insertRow(0);
+                        newRow.innerHTML = `<td>${elapsedTime}</td><td>${data.temp.toFixed(2)}</td><td>${data.humidity.toFixed(2)}</td><td>${data.pressure.toFixed(2)}</td><td>${data.light}</td>`;
 
-                    myChart.data.labels.push(elapsedTime);
-                    myChart.data.datasets[0].data.push(data.temp);
-                    myChart.data.datasets[1].data.push(data.humidity);
-                    myChart.data.datasets[2].data.push(data.pressure);
-                    myChart.data.datasets[3].data.push(data.light);
-                    
-                    if (myChart.data.labels.length > 60) {
-                        myChart.data.labels.shift();
-                        myChart.data.datasets.forEach(dataset => dataset.data.shift());
+                        myChart.data.labels.push(elapsedTime);
+                        myChart.data.datasets[0].data.push(data.temp);
+                        myChart.data.datasets[1].data.push(data.humidity);
+                        myChart.data.datasets[2].data.push(data.pressure);
+                        myChart.data.datasets[3].data.push(data.light);
+                        
+                        if (myChart.data.labels.length > 60) {
+                            myChart.data.labels.shift();
+                            myChart.data.datasets.forEach(dataset => dataset.data.shift());
+                        }
+                        myChart.update('none');
                     }
-                    myChart.update('none');
                 }
             } catch(e) {
                 console.error("Invalid JSON:", value);
