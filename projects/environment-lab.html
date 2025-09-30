@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
+        /* 이 페이지에만 적용되는 추가 스타일 */
         .sensor-readout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
         .sensor-readout { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; text-align: center; }
         .sensor-readout h3 { margin-top: 0; font-size: 1.2em; color: #495057; }
@@ -75,22 +76,13 @@
             <div class="content-column">
                 <h2>실시간 변화 그래프</h2>
                 <div class="graph-controls">
-                    <span>X축:</span>
-                    <select id="xAxisSelect">
-                        <option value="time">시간 (s)</option>
-                        <option value="temp">온도 (°C)</option>
-                        <option value="humidity">습도 (%)</option>
-                        <option value="pressure">압력 (kPa)</option>
-                        <option value="light">조도</option>
-                    </select>
-                    <span>Y축:</span>
-                    <select id="yAxisSelect">
-                        <option value="time">시간 (s)</option>
-                        <option value="temp" selected>온도 (°C)</option>
-                        <option value="humidity">습도 (%)</option>
-                        <option value="pressure">압력 (kPa)</option>
-                        <option value="light">조도</option>
-                    </select>
+                    <span>데이터 선택:</span>
+                    <div id="yAxisCheckboxGroup" class="checkbox-group">
+                        <label><input type="checkbox" name="yAxis" value="temp" checked> 온도</label>
+                        <label><input type="checkbox" name="yAxis" value="humidity" checked> 습도</label>
+                        <label><input type="checkbox" name="yAxis" value="pressure"> 압력</label>
+                        <label><input type="checkbox" name="yAxis" value="light"> 조도</label>
+                    </div>
                 </div>
                 <div class="chart-container" style="height: 455px;"><canvas id="myChart"></canvas></div>
             </div>
@@ -108,8 +100,7 @@
         const lightValue = document.getElementById('light-value');
         const historyTbody = document.getElementById('historyTbody');
         const chartCanvas = document.getElementById('myChart');
-        const xAxisSelect = document.getElementById('xAxisSelect'); // 새로 추가
-        const yAxisSelect = document.getElementById('yAxisSelect'); // 새로 추가
+        const yAxisCheckboxGroup = document.getElementById('yAxisCheckboxGroup');
         const samplingRateSelect = document.getElementById('samplingRateSelect');
         
         let bleDevice, commandCharacteristic;
@@ -120,33 +111,48 @@
         const UART_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
         const UART_CMD_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
+        
+        const DATASET_MAP = { 'temp': 0, 'humidity': 1, 'pressure': 2, 'light': 3 };
 
         // --- 2. 차트 초기화 ---
         myChart = new Chart(chartCanvas, {
-            type: 'scatter', // 라인 차트 대신 산점도(scatter)로 변경
+            type: 'line',
             data: {
-                datasets: [{
-                    label: '환경 데이터',
-                    data: [],
-                    backgroundColor: 'rgba(54, 162, 235, 0.6)'
-                }]
+                labels: [],
+                datasets: [
+                    { label: '온도 (°C)', data: [], borderColor: 'rgba(255, 99, 132, 1)', yAxisID: 'y' },
+                    { label: '습도 (%)', data: [], borderColor: 'rgba(54, 162, 235, 1)', yAxisID: 'y' },
+                    { label: '압력 (kPa)', data: [], borderColor: 'rgba(153, 102, 255, 1)', yAxisID: 'y', hidden: true },
+                    { label: '조도', data: [], borderColor: 'rgba(255, 206, 86, 1)', yAxisID: 'y1', hidden: true }
+                ]
             },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'X축' } }, y: { title: { display: true, text: 'Y축' } } } }
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { title: { display: true, text: '시간 (s)' } },
+                    y: { type: 'linear', position: 'left', title: { display: true, text: '온도/습도/압력' } },
+                    y1: { type: 'linear', position: 'right', title: { display: true, text: '조도' }, grid: { drawOnChartArea: false } }
+                }
+            }
         });
 
         // --- 3. 이벤트 리스너 연결 ---
         connectBleButton.addEventListener('click', connectBLE);
         disconnectBleButton.addEventListener('click', disconnectBLE);
         samplingRateSelect.addEventListener('change', handleRateChange);
-        xAxisSelect.addEventListener('change', updateGraph);
-        yAxisSelect.addEventListener('change', updateGraph);
+        yAxisCheckboxGroup.addEventListener('change', (event) => {
+            const checkbox = event.target;
+            const datasetIndex = DATASET_MAP[checkbox.value];
+            myChart.data.datasets[datasetIndex].hidden = !checkbox.checked;
+            myChart.update();
+        });
 
         // --- 4. 함수 정의 ---
         async function connectBLE() {
             try {
                 const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] });
                 bleDevice = device;
-                device.addEventListener('gattserverdisconnected', onDisconnected);
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
                 statusSpan.textContent = `연결 중: ${device.name}`;
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(UART_SERVICE_UUID);
@@ -157,7 +163,7 @@
                 dataCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
                 
                 await commandCharacteristic.writeValue(new TextEncoder().encode("START:ENV"));
-                handleRateChange(); // 연결 시 현재 선택된 속도 전송
+                handleRateChange();
                 
                 statusSpan.textContent = `연결됨: ${device.name}`;
                 connectBleButton.style.display = 'none';
@@ -179,7 +185,6 @@
             statusSpan.textContent = '연결 해제됨';
             connectBleButton.style.display = 'inline-block';
             disconnectBleButton.style.display = 'none';
-            // 값 초기화
             tempValue.textContent = '--';
             humidityValue.textContent = '--';
             pressureValue.textContent = '--';
@@ -199,67 +204,34 @@
                 const json = JSON.parse(value);
                 if (json.type === 'env') {
                     const data = json.data;
-                    const elapsedTime = (recordedData.length * (envIntervalMs/1000.0)).toFixed(2);
+                    const elapsedTime = (recordedData.length * (envIntervalMs/1000.0)).toFixed(1);
 
-                    // 1. 현재 값 업데이트
                     tempValue.textContent = data.temp.toFixed(2);
                     humidityValue.textContent = data.humidity.toFixed(2);
                     pressureValue.textContent = data.pressure.toFixed(2);
                     lightValue.textContent = data.light;
                     
-                    const newData = {
-                        time: parseFloat(elapsedTime),
-                        temp: data.temp,
-                        humidity: data.humidity,
-                        pressure: data.pressure,
-                        light: data.light
-                    };
+                    const newData = { time: parseFloat(elapsedTime), ...data };
                     recordedData.push(newData);
                     
-                    // 2. 데이터가 너무 많아지면 앞부분을 잘라냄 (최대 100개)
-                    if (recordedData.length > 100) {
-                        recordedData.shift();
-                    }
+                    const newRow = historyTbody.insertRow(0);
+                    newRow.innerHTML = `<td>${elapsedTime}</td><td>${data.temp.toFixed(2)}</td><td>${data.humidity.toFixed(2)}</td><td>${data.pressure.toFixed(2)}</td><td>${data.light}</td>`;
+
+                    myChart.data.labels.push(elapsedTime);
+                    myChart.data.datasets[0].data.push(data.temp);
+                    myChart.data.datasets[1].data.push(data.humidity);
+                    myChart.data.datasets[2].data.push(data.pressure);
+                    myChart.data.datasets[3].data.push(data.light);
                     
-                    updateTable();
-                    updateGraph();
+                    if (myChart.data.labels.length > 60) {
+                        myChart.data.labels.shift();
+                        myChart.data.datasets.forEach(dataset => dataset.data.shift());
+                    }
+                    myChart.update('none');
                 }
             } catch(e) {
                 console.error("Invalid JSON:", value);
             }
-        }
-
-        // --- 🔻 핵심 변경 사항 2: 테이블과 그래프 업데이트 로직 분리 🔻 ---
-        function updateTable() {
-            historyTbody.innerHTML = ''; // 테이블 비우기
-            // 최신 데이터가 위로 오도록 역순으로 표시
-            [...recordedData].reverse().forEach(data => {
-                const newRow = historyTbody.insertRow();
-                newRow.innerHTML = `<td>${data.time.toFixed(2)}</td><td>${data.temp.toFixed(2)}</td><td>${data.humidity.toFixed(2)}</td><td>${data.pressure.toFixed(2)}</td><td>${data.light}</td>`;
-            });
-        }
-
-        function updateGraph() {
-            if (!myChart || recordedData.length === 0) return;
-            
-            const xAxisKey = xAxisSelect.value;
-            const yAxisKey = yAxisSelect.value;
-
-            if (xAxisKey === yAxisKey) {
-                myChart.data.datasets[0].data = [];
-            } else {
-                const graphData = recordedData.map(d => ({
-                    x: d[xAxisKey],
-                    y: d[yAxisKey]
-                }));
-                myChart.data.datasets[0].data = graphData;
-            }
-
-            // X축과 Y축 라벨 업데이트
-            myChart.options.scales.x.title.text = xAxisSelect.selectedOptions[0].text;
-            myChart.options.scales.y.title.text = yAxisSelect.selectedOptions[0].text;
-
-            myChart.update('none');
         }
     </script>
 </body>
