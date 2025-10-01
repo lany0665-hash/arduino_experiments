@@ -13,8 +13,10 @@
         .sensor-readout { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; text-align: center; }
         .sensor-readout h3 { margin-top: 0; font-size: 1.2em; color: #495057; }
         .sensor-readout .value { font-size: 2.5em; font-weight: bold; color: #007BFF; }
-        .checkbox-group { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
-        .checkbox-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+        /* ▼▼▼ 그래프 컨트롤 스타일 추가 ▼▼▼ */
+        .graph-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 10px; }
+        .graph-controls span { font-weight: bold; }
+        .graph-controls select { padding: 5px; border-radius: 4px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
@@ -30,6 +32,7 @@
                 <button id="disconnectBleButton" class="ble-button" style="display:none; background-color:#6c757d;">연결 해제</button>
             </div>
         </div>
+
         <div class="table-header">
               <h2>실시간 현황</h2>
               <div class="table-controls">
@@ -75,13 +78,22 @@
             <div class="content-column">
                 <h2>실시간 변화 그래프</h2>
                 <div class="graph-controls">
-                    <span>데이터 선택:</span>
-                    <div id="yAxisCheckboxGroup" class="checkbox-group">
-                        <label><input type="checkbox" name="yAxis" value="temp" checked> 온도</label>
-                        <label><input type="checkbox" name="yAxis" value="humidity" checked> 습도</label>
-                        <label><input type="checkbox" name="yAxis" value="pressure"> 압력</label>
-                        <label><input type="checkbox" name="yAxis" value="light"> 조도</label>
-                    </div>
+                    <span>X축:</span>
+                    <select id="xAxisSelect">
+                        <option value="time" selected>시간</option>
+                        <option value="temp">온도</option>
+                        <option value="humidity">습도</option>
+                        <option value="pressure">압력</option>
+                        <option value="light">조도</option>
+                    </select>
+                    <span>Y축:</span>
+                    <select id="yAxisSelect">
+                        <option value="time">시간</option>
+                        <option value="temp" selected>온도</option>
+                        <option value="humidity">습도</option>
+                        <option value="pressure">압력</option>
+                        <option value="light">조도</option>
+                    </select>
                 </div>
                 <div class="chart-container" style="height: 455px;"><canvas id="myChart"></canvas></div>
             </div>
@@ -99,42 +111,71 @@
         const lightValue = document.getElementById('light-value');
         const historyTbody = document.getElementById('historyTbody');
         const chartCanvas = document.getElementById('myChart');
-        const yAxisCheckboxGroup = document.getElementById('yAxisCheckboxGroup');
         const samplingRateSelect = document.getElementById('samplingRateSelect');
-        const recordButton = document.getElementById('recordButton'); // 새로 추가
+        const recordButton = document.getElementById('recordButton');
+        
+        // ▼▼▼ JS 수정: 드롭다운 UI 요소 추가 ▼▼▼
+        const xAxisSelect = document.getElementById('xAxisSelect');
+        const yAxisSelect = document.getElementById('yAxisSelect');
         
         let bleDevice, commandCharacteristic;
         let recordedData = [];
         let myChart;
         let envIntervalMs = 1000;
-        let isRecording = false; // 새로 추가
+        let isRecording = false;
         
         const UART_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
         const UART_CMD_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
         
-        const DATASET_MAP = { 'temp': 0, 'humidity': 1, 'pressure': 2, 'light': 3 };
+        // ▼▼▼ JS 수정: 축 이름과 단위를 관리하는 객체 추가 ▼▼▼
+        const SENSOR_UNITS = {
+            time: '시간 (s)',
+            temp: '온도 (°C)',
+            humidity: '습도 (%)',
+            pressure: '압력 (kPa)',
+            light: '조도'
+        };
 
         // --- 2. 차트 초기화 ---
+        // ▼▼▼ JS 수정: 차트 타입을 scatter로 변경하고 단일 데이터셋으로 초기화 ▼▼▼
         myChart = new Chart(chartCanvas, {
-            type: 'line',
-            data: { labels: [], datasets: [ { label: '온도 (°C)', data: [], borderColor: 'rgba(255, 99, 132, 1)', yAxisID: 'y' }, { label: '습도 (%)', data: [], borderColor: 'rgba(54, 162, 235, 1)', yAxisID: 'y' }, { label: '압력 (kPa)', data: [], borderColor: 'rgba(153, 102, 255, 1)', yAxisID: 'y', hidden: true }, { label: '조도', data: [], borderColor: 'rgba(255, 206, 86, 1)', yAxisID: 'y1', hidden: true } ] },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: '시간 (s)' } }, y: { type: 'linear', position: 'left', title: { display: true, text: '온도/습도/압력' } }, y1: { type: 'linear', position: 'right', title: { display: true, text: '조도' }, grid: { drawOnChartArea: false } } } }
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: '측정 데이터',
+                    data: [], // 데이터는 {x: value, y: value} 형태의 객체 배열
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    showLine: true, // 점들을 선으로 연결
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: { display: true, text: SENSOR_UNITS[xAxisSelect.value] } // 초기 X축 제목
+                    },
+                    y: {
+                        title: { display: true, text: SENSOR_UNITS[yAxisSelect.value] } // 초기 Y축 제목
+                    }
+                }
+            }
         });
 
         // --- 3. 이벤트 리스너 연결 ---
         connectBleButton.addEventListener('click', connectBLE);
         disconnectBleButton.addEventListener('click', disconnectBLE);
         samplingRateSelect.addEventListener('change', handleRateChange);
-        recordButton.addEventListener('click', toggleRecording); // 새로 추가
-        yAxisCheckboxGroup.addEventListener('change', (event) => {
-            const checkbox = event.target;
-            const datasetIndex = DATASET_MAP[checkbox.value];
-            myChart.data.datasets[datasetIndex].hidden = !checkbox.checked;
-            myChart.update();
-        });
+        recordButton.addEventListener('click', toggleRecording);
+        // ▼▼▼ JS 수정: 체크박스 리스너를 드롭다운 리스너로 변경 ▼▼▼
+        xAxisSelect.addEventListener('change', updateChartAxes);
+        yAxisSelect.addEventListener('change', updateChartAxes);
+
 
         // --- 4. 함수 정의 ---
+        // (connectBLE, disconnectBLE, onDisconnected, handleRateChange 함수는 이전과 동일)
         async function connectBLE() {
             try {
                 const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] });
@@ -145,31 +186,26 @@
                 const service = await server.getPrimaryService(UART_SERVICE_UUID);
                 const dataCharacteristic = await service.getCharacteristic(UART_TX_CHAR_UUID);
                 commandCharacteristic = await service.getCharacteristic(UART_CMD_CHAR_UUID);
-                
                 await dataCharacteristic.startNotifications();
                 dataCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
-                
                 await commandCharacteristic.writeValue(new TextEncoder().encode("START:ENV"));
                 handleRateChange();
-                
                 statusSpan.textContent = `연결됨: ${device.name}`;
                 connectBleButton.style.display = 'none';
                 disconnectBleButton.style.display = 'inline-block';
-                recordButton.disabled = false; // 연결 시 측정 버튼 활성화
+                recordButton.disabled = false;
             } catch(error) {
                 statusSpan.textContent = '연결 실패';
                 console.error(error);
             }
         }
-        
         async function disconnectBLE() {
             if (bleDevice && bleDevice.gatt.connected) {
-                if(isRecording) toggleRecording(); // 측정 중이면 중지
+                if(isRecording) toggleRecording();
                 await commandCharacteristic.writeValue(new TextEncoder().encode("STOP"));
                 bleDevice.gatt.disconnect();
             }
         }
-        
         function onDisconnected() {
             statusSpan.textContent = '연결 해제됨';
             connectBleButton.style.display = 'inline-block';
@@ -177,23 +213,20 @@
             recordButton.disabled = true;
             tempValue.textContent = '--'; humidityValue.textContent = '--'; pressureValue.textContent = '--'; lightValue.textContent = '--';
         }
-
         async function handleRateChange() {
             envIntervalMs = parseInt(samplingRateSelect.value);
             if (bleDevice && bleDevice.gatt.connected) {
                 await commandCharacteristic.writeValue(new TextEncoder().encode(`SET_ENV_RATE:${envIntervalMs}`));
             }
         }
-        
-        // --- 🔻 핵심 변경 사항 2: 측정 토글 함수 추가 🔻 ---
+
+        // ▼▼▼ JS 수정: 측정 시작/중지 시 차트 데이터 초기화 방식 변경 ▼▼▼
         function toggleRecording() {
             isRecording = !isRecording;
             if (isRecording) {
-                // 측정 시작 시 초기화
                 recordedData = [];
                 historyTbody.innerHTML = '';
-                myChart.data.labels = [];
-                myChart.data.datasets.forEach(dataset => dataset.data = []);
+                myChart.data.datasets[0].data = []; // scatter 차트 데이터 초기화
                 myChart.update('none');
 
                 recordButton.textContent = '측정 중지';
@@ -206,6 +239,28 @@
             }
         }
 
+        // ▼▼▼ JS 신규: 드롭다운 변경 시 호출될 함수 ▼▼▼
+        function updateChartAxes() {
+            const xKey = xAxisSelect.value;
+            const yKey = yAxisSelect.value;
+
+            // 1. 축 제목과 데이터셋 라벨 업데이트
+            myChart.options.scales.x.title.text = SENSOR_UNITS[xKey];
+            myChart.options.scales.y.title.text = SENSOR_UNITS[yKey];
+            myChart.data.datasets[0].label = `${SENSOR_UNITS[yKey]} vs ${SENSOR_UNITS[xKey]}`;
+
+            // 2. 이미 기록된 데이터로 차트 데이터 재생성
+            const newData = recordedData.map(d => ({
+                x: d[xKey],
+                y: d[yKey]
+            }));
+            myChart.data.datasets[0].data = newData;
+
+            // 3. 차트 업데이트
+            myChart.update();
+        }
+
+        // ▼▼▼ JS 수정: 실시간 데이터 수신 시 차트 업데이트 방식 변경 ▼▼▼
         function handleNotifications(event) {
             const value = new TextDecoder().decode(event.target.value);
             try {
@@ -213,30 +268,30 @@
                 if (json.type === 'env') {
                     const data = json.data;
 
-                    // 현재 값은 항상 업데이트
                     tempValue.textContent = data.temp.toFixed(2);
                     humidityValue.textContent = data.humidity.toFixed(2);
                     pressureValue.textContent = data.pressure.toFixed(2);
                     lightValue.textContent = data.light;
                     
-                    // 측정 중일 때만 데이터 기록 및 그래프 업데이트
                     if (isRecording) {
-                        const elapsedTime = (recordedData.length * (envIntervalMs/1000.0)).toFixed(1);
-                        const newData = { time: parseFloat(elapsedTime), ...data };
-                        recordedData.push(newData);
+                        const elapsedTime = (recordedData.length * (envIntervalMs / 1000.0));
+                        const newDataPoint = { time: parseFloat(elapsedTime.toFixed(3)), ...data };
+                        recordedData.push(newDataPoint);
                         
                         const newRow = historyTbody.insertRow(0);
-                        newRow.innerHTML = `<td>${elapsedTime}</td><td>${data.temp.toFixed(2)}</td><td>${data.humidity.toFixed(2)}</td><td>${data.pressure.toFixed(2)}</td><td>${data.light}</td>`;
+                        newRow.innerHTML = `<td>${newDataPoint.time.toFixed(1)}</td><td>${data.temp.toFixed(2)}</td><td>${data.humidity.toFixed(2)}</td><td>${data.pressure.toFixed(2)}</td><td>${data.light}</td>`;
 
-                        myChart.data.labels.push(elapsedTime);
-                        myChart.data.datasets[0].data.push(data.temp);
-                        myChart.data.datasets[1].data.push(data.humidity);
-                        myChart.data.datasets[2].data.push(data.pressure);
-                        myChart.data.datasets[3].data.push(data.light);
+                        // 현재 드롭다운에서 선택된 축에 맞는 데이터를 차트에 추가
+                        const xKey = xAxisSelect.value;
+                        const yKey = yAxisSelect.value;
+                        myChart.data.datasets[0].data.push({
+                            x: newDataPoint[xKey],
+                            y: newDataPoint[yKey]
+                        });
                         
-                        if (myChart.data.labels.length > 60) {
-                            myChart.data.labels.shift();
-                            myChart.data.datasets.forEach(dataset => dataset.data.shift());
+                        // 차트에 표시할 데이터 개수 제한 (예: 60개)
+                        if (myChart.data.datasets[0].data.length > 60) {
+                            myChart.data.datasets[0].data.shift();
                         }
                         myChart.update('none');
                     }
