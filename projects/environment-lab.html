@@ -138,7 +138,7 @@
         myChart = new Chart(chartCanvas, {
             type: 'scatter',
             data: { datasets: [] },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: '시간 (s)' } }, y: { title: { display: true, text: '온도 (°C)' } } } }
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'linear', title: { display: true, text: '시간 (s)' } }, y: { title: { display: true, text: '온도 (°C)' } } } }
         });
 
         window.addEventListener('load', loadTrials);
@@ -200,7 +200,6 @@
 
         function toggleRecording() {
             isRecording = !isRecording;
-            const isDataPresent = recordedData.length > 0;
             if (isRecording) {
                 recordedData = [];
                 historyTbody.innerHTML = '';
@@ -209,15 +208,20 @@
                 downloadButton.disabled = true; saveTrialButton.disabled = true; cropButton.disabled = true; deleteRangeButton.disabled = true;
                 if(rangeSlider.noUiSlider) rangeSlider.noUiSlider.destroy();
                 rangeSlider.style.display = 'none';
+
+                // [수정] 측정 시작 시, '현재 측정'을 위한 빈 데이터셋을 미리 준비
+                redrawChart();
             } else {
                 recordButton.textContent = '측정 시작'; recordButton.style.backgroundColor = '#28A745';
                 statusSpan.textContent = `측정 완료 (총 ${recordedData.length}개 데이터)`;
-                downloadButton.disabled = !isDataPresent; saveTrialButton.disabled = !isDataPresent; 
-                cropButton.disabled = !isDataPresent; deleteRangeButton.disabled = !isDataPresent;
+                const isDataPresent = recordedData.length > 0;
+                downloadButton.disabled = !isDataPresent; 
+                saveTrialButton.disabled = !isDataPresent; 
+                cropButton.disabled = !isDataPresent; 
+                deleteRangeButton.disabled = !isDataPresent;
                 if (isDataPresent) createOrUpdateSlider();
             }
             renderTrialList();
-            redrawChart();
         }
 
         function handleNotifications(event) {
@@ -243,19 +247,17 @@
                         const newRow = historyTbody.insertRow(0);
                         addTableRow(newRow, newDataPoint);
 
-                        if(historyTbody.rows.length > 500) { // [수정 1] 테이블 길이 500으로 제한
+                        if(historyTbody.rows.length > 500) {
                             historyTbody.deleteRow(-1);
                         }
 
-                        const trialsToShow = getVisibleTrials();
-                        if (trialsToShow.some(t => t.id === 'current')) {
-                            const dataset = myChart.data.datasets.find(ds => ds.label === '현재 측정');
-                            if(dataset) {
-                                const xKey = xAxisSelect.value;
-                                const yKey = yAxisSelect.value;
-                                dataset.data.push({ x: newDataPoint[xKey], y: newDataPoint[yKey] });
-                                myChart.update('none');
-                            }
+                        // '현재 측정' 데이터셋을 찾아서 새 데이터 포인트만 추가
+                        const dataset = myChart.data.datasets.find(ds => ds.label === '현재 측정');
+                        if(dataset) {
+                            const xKey = xAxisSelect.value;
+                            const yKey = yAxisSelect.value;
+                            dataset.data.push({ x: newDataPoint[xKey], y: newDataPoint[yKey] });
+                            myChart.update('none');
                         }
                     }
                 }
@@ -328,7 +330,6 @@
             renderTable(); renderTrialList(); redrawChart(); createOrUpdateSlider();
         }
 
-        // [수정 2] 선택 영역 삭제 함수 추가
         function deleteDataInRange() {
             if (recordedData.length === 0 || !rangeSlider.noUiSlider) return alert("삭제할 데이터가 없습니다.");
             const [startTime, endTime] = rangeSlider.noUiSlider.get().map(Number);
@@ -362,7 +363,6 @@
             const trialsToShow = getVisibleTrials();
 
             trialsToShow.forEach((trial, trialIndex) => {
-                if (!trial || trial.data.length === 0) return;
                 const color = TRIAL_COLORS[trialIndex % TRIAL_COLORS.length];
                 myChart.data.datasets.push({
                     label: trial.name,
