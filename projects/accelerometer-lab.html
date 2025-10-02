@@ -22,6 +22,14 @@
         .checkbox-group { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
         .checkbox-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
         .slider-group { display: flex; align-items: center; gap: 10px; }
+        /* ▼▼▼ 추가된 스타일 ▼▼▼ */
+        .trial-management { margin-top: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+        .trial-management h3 { margin-top: 0; }
+        .trial-list { list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto; }
+        .trial-list li { display: flex; align-items: center; gap: 10px; padding: 5px; border-bottom: 1px solid #eee; }
+        .trial-list li:last-child { border-bottom: none; }
+        .trial-list button { padding: 2px 8px; font-size: 0.8em; }
+        .trial-controls { display: flex; gap: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -58,6 +66,17 @@
                         <tbody id="historyTbody"></tbody>
                     </table>
                 </div>
+
+                <div class="trial-management">
+                    <h3>실험 회차 관리</h3>
+                    <ul id="trial-list" class="trial-list">
+                        </ul>
+                    <div class="trial-controls">
+                        <button id="saveTrialButton" disabled>현재 측정 저장</button>
+                        <button id="clearTrialsButton">모든 회차 삭제</button>
+                    </div>
+                </div>
+
             </div>
             <div class="content-column">
                 <h2>그래프 시각화 및 함수 피팅</h2>
@@ -81,12 +100,10 @@
                     <button id="resetZoomButton">줌 리셋</button>
                 </div>
                  <div class="graph-controls fit-controls">
-                    <span>피팅 범위: <b id="range-value"></b></span>
+                    <span>피팅/편집 범위: <b id="range-value"></b></span>
+                    <button id="cropButton" disabled style="margin-left: 10px;">선택 영역만 남기기</button>
                     <select id="fitTargetSelect" style="margin-left: auto;">
-                        <option value="X">X 기준</option>
-                        <option value="Y">Y 기준</option>
-                        <option value="Z">Z 기준</option>
-                        <option value="Total">Total 기준</option>
+                        <option value="X">X 기준</option> <option value="Y">Y 기준</option> <option value="Z">Z 기준</option> <option value="Total">Total 기준</option>
                     </select>
                     <select id="polynomialOrderSelect">
                         <option value="1">1차</option><option value="2">2차</option><option value="3" selected>3차</option>
@@ -123,6 +140,11 @@
         const pointSizeSlider = document.getElementById('pointSizeSlider');
         const pointSizeValue = document.getElementById('pointSizeValue');
         const showLineCheckbox = document.getElementById('showLineCheckbox');
+        // ▼▼▼ 추가된 UI 요소 ▼▼▼
+        const trialList = document.getElementById('trial-list');
+        const saveTrialButton = document.getElementById('saveTrialButton');
+        const clearTrialsButton = document.getElementById('clearTrialsButton');
+        const cropButton = document.getElementById('cropButton');
 
         let recordedData = []; 
         let isRecording = false;
@@ -130,31 +152,26 @@
         let myChart;
         let commandCharacteristic;
         let bleDevice;
+        let savedTrials = {}; // 저장된 회차 데이터 관리
 
         const UART_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
         const UART_CMD_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
         
-        const DATASET_MAP = { 'X': 0, 'Y': 1, 'Z': 2, 'Total': 3, 'Fit': 4 };
-        const DATASET_COLORS = ['rgba(255, 99, 132, 0.8)', 'rgba(54, 162, 235, 0.8)', 'rgba(75, 192, 192, 0.8)', 'rgba(153, 102, 255, 0.8)', 'rgba(255, 159, 64, 1)'];
+        const AXES = ['X', 'Y', 'Z', 'Total'];
         const COL_MAP = { 'Time': 0, 'X': 1, 'Y': 2, 'Z': 3, 'Total': 4 };
+        // ▼▼▼ 회차별 색상 팔레트 ▼▼▼
+        const TRIAL_COLORS = ['rgba(255, 99, 132, 0.8)', 'rgba(54, 162, 235, 0.8)', 'rgba(75, 192, 192, 0.8)', 'rgba(153, 102, 255, 0.8)', 'rgba(255, 206, 86, 0.8)', 'rgba(255, 159, 64, 0.8)'];
 
         // --- 2. 차트 초기화 ---
         myChart = new Chart(chartCanvas, {
             type: 'scatter',
-            data: {
-                datasets: [
-                    { label: 'X', data: [], backgroundColor: DATASET_COLORS[0], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[0] },
-                    { label: 'Y', data: [], backgroundColor: DATASET_COLORS[1], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[1] },
-                    { label: 'Z', data: [], backgroundColor: DATASET_COLORS[2], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[2], hidden: true },
-                    { label: 'Total', data: [], backgroundColor: DATASET_COLORS[3], pointRadius: 3, showLine: false, tension: 0.1, borderColor: DATASET_COLORS[3], hidden: true },
-                    { label: '함수 피팅', data: [], borderColor: DATASET_COLORS[4], type: 'line', fill: false, tension: 0.1, pointRadius: 0 }
-                ]
-            },
+            data: { datasets: [] }, // 데이터셋은 동적으로 관리
             options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'linear', title: { display: true, text: 'Time (s)' } }, y: { title: { display: true, text: 'Acceleration (g)' } } }, plugins: { zoom: { pan: { enabled: true, mode: 'x', modifierKey: 'shift' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } }, annotation: { annotations: { startLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false }, endLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false } } } } }
         });
 
         // --- 3. 이벤트 리스너 연결 ---
+        window.addEventListener('load', loadTrials); // 페이지 로드 시 저장된 회차 불러오기
         connectBleButton.addEventListener('click', connectBLE);
         disconnectBleButton.addEventListener('click', disconnectBLE);
         samplingRateSelect.addEventListener('change', handleRateChange);
@@ -162,168 +179,304 @@
         resetZoomButton.addEventListener('click', () => myChart.resetZoom());
         fitButton.addEventListener('click', fitPolynomialToRange);
         downloadButton.addEventListener('click', downloadData);
-        yAxisCheckboxGroup.addEventListener('change', updateGraphVisibility);
-        pointSizeSlider.addEventListener('input', (event) => {
-            const newSize = parseFloat(event.target.value);
-            pointSizeValue.textContent = newSize;
-            for (let i = 0; i <= DATASET_MAP.Total; i++) {
-                myChart.data.datasets[i].pointRadius = newSize;
-            }
-            myChart.update('none');
-        });
-        showLineCheckbox.addEventListener('change', (event) => {
-            const showLine = event.target.checked;
-            for (let i = 0; i <= DATASET_MAP.Total; i++) {
-                myChart.data.datasets[i].showLine = showLine;
-            }
-            myChart.update();
-        });
+        yAxisCheckboxGroup.addEventListener('change', updateChartWithSelectedTrials);
+        pointSizeSlider.addEventListener('input', updateChartStyle);
+        showLineCheckbox.addEventListener('change', updateChartStyle);
+        // ▼▼▼ 추가된 이벤트 리스너 ▼▼▼
+        saveTrialButton.addEventListener('click', saveCurrentTrial);
+        clearTrialsButton.addEventListener('click', clearAllTrials);
+        cropButton.addEventListener('click', cropDataToRange);
+
 
         // --- 4. 함수 정의 ---
-        async function connectBLE() {
-            try {
-                const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] }); 
-                bleDevice = device;
-                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-                statusSpan.textContent = `연결 중: ${device.name}`; 
-                const server = await device.gatt.connect(); 
-                const service = await server.getPrimaryService(UART_SERVICE_UUID); 
-                const dataCharacteristic = await service.getCharacteristic(UART_TX_CHAR_UUID);
-                commandCharacteristic = await service.getCharacteristic(UART_CMD_CHAR_UUID);
-                await dataCharacteristic.startNotifications(); 
-                dataCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotifications); 
-                
-                await commandCharacteristic.writeValue(new TextEncoder().encode("START:IMU"));
-                
-                statusSpan.textContent = `연결됨: ${device.name}`; 
-                connectBleButton.style.display = 'none';
-                disconnectBleButton.style.display = 'inline-block';
-                recordButton.disabled = false;
-                handleRateChange();
-            } catch (error) { 
-                console.error('BLE 연결 실패:', error); 
-                statusSpan.textContent = 'BLE 연결 실패'; 
-            } 
-        }
-
-        function disconnectBLE() { 
-            if (bleDevice && bleDevice.gatt.connected) {
-                commandCharacteristic.writeValue(new TextEncoder().encode("STOP"));
-                bleDevice.gatt.disconnect(); 
-            }
-        }
-
-        function onDisconnected() { statusSpan.textContent = '연결 해제됨'; connectBleButton.style.display = 'inline-block'; disconnectBleButton.style.display = 'none'; recordButton.disabled = true; if (isRecording) { toggleRecording(); } bleDevice = null; }
-        
-        function handleRateChange() { 
-            const selectedHz = parseInt(samplingRateSelect.value); 
-            if (selectedHz === 200) samplingIntervalMs = 5; 
-            else if (selectedHz === 100) samplingIntervalMs = 10; 
-            else if (selectedHz === 25) samplingIntervalMs = 40; 
-            sendRateCommand(); 
-        }
-        
-        async function sendRateCommand() { 
-            if (!commandCharacteristic || !bleDevice || !bleDevice.gatt.connected) return; 
-            const command = `SET_IMU_RATE:${samplingRateSelect.value}`; 
-            try { await commandCharacteristic.writeValue(new TextEncoder().encode(command)); } 
-            catch (error) { console.error(`명령 전송 실패: ${command}`, error); } 
-        }
+        // (connectBLE, disconnectBLE, onDisconnected, handleRateChange 등 기존 함수는 생략)
+        async function connectBLE(){ /* 이전과 동일 */ try{const device=await navigator.bluetooth.requestDevice({filters:[{services:[UART_SERVICE_UUID],namePrefix:'Sensor-'}]});bleDevice=device;bleDevice.addEventListener('gattserverdisconnected',onDisconnected);statusSpan.textContent=`연결 중: ${device.name}`;const server=await device.gatt.connect();const service=await server.getPrimaryService(UART_SERVICE_UUID);const dataCharacteristic=await service.getCharacteristic(UART_TX_CHAR_UUID);commandCharacteristic=await service.getCharacteristic(UART_CMD_CHAR_UUID);await dataCharacteristic.startNotifications();dataCharacteristic.addEventListener('characteristicvaluechanged',handleBleNotifications);await commandCharacteristic.writeValue(new TextEncoder().encode("START:IMU"));statusSpan.textContent=`연결됨: ${device.name}`;connectBleButton.style.display='none';disconnectBleButton.style.display='inline-block';recordButton.disabled=false;handleRateChange()}catch(error){console.error('BLE 연결 실패:',error);statusSpan.textContent='BLE 연결 실패'}}
+        function disconnectBLE(){if(bleDevice&&bleDevice.gatt.connected){commandCharacteristic.writeValue(new TextEncoder().encode("STOP"));bleDevice.gatt.disconnect()}}
+        function onDisconnected(){statusSpan.textContent='연결 해제됨';connectBleButton.style.display='inline-block';disconnectBleButton.style.display='none';recordButton.disabled=true;if(isRecording){toggleRecording()}bleDevice=null}
+        function handleRateChange(){const selectedHz=parseInt(samplingRateSelect.value);if(selectedHz===200)samplingIntervalMs=5;else if(selectedHz===100)samplingIntervalMs=10;else if(selectedHz===25)samplingIntervalMs=40;sendRateCommand()}
+        async function sendRateCommand(){if(!commandCharacteristic||!bleDevice||!bleDevice.gatt.connected)return;const command=`SET_IMU_RATE:${samplingRateSelect.value}`;try{await commandCharacteristic.writeValue(new TextEncoder().encode(command))}catch(error){console.error(`명령 전송 실패: ${command}`,error)}}
 
         function toggleRecording() {
             isRecording = !isRecording;
             if (isRecording) {
-                recordedData = []; historyTbody.innerHTML = '';
-                Object.values(DATASET_MAP).forEach(index => {
-                    if (myChart.data.datasets[index]) myChart.data.datasets[index].data = [];
-                });
-                myChart.update('none');
-                equationSpan.textContent = ''; r2ValueSpan.textContent = ''; 
-                recordButton.textContent = '측정 중지'; recordButton.style.backgroundColor = '#DC3545'; 
-                downloadButton.disabled = true; fitButton.disabled = true;
+                recordedData = []; 
+                updateTable(); // 테이블 초기화
+                equationSpan.textContent = ''; r2ValueSpan.textContent = '';
+                recordButton.textContent = '측정 중지'; recordButton.style.backgroundColor = '#DC3545';
+                downloadButton.disabled = true; fitButton.disabled = true; saveTrialButton.disabled = true; cropButton.disabled = true;
                 if (rangeSlider.noUiSlider) rangeSlider.noUiSlider.destroy();
                 rangeSlider.style.display = 'none';
                 statusSpan.textContent = `측정 중... (${samplingRateSelect.selectedOptions[0].text})`;
+                updateChartWithSelectedTrials(); // 차트 초기화 및 선택된 회차 다시 그리기
             } else {
-                recordButton.textContent = '측정 시작'; recordButton.style.backgroundColor = '#28A745'; 
+                recordButton.textContent = '측정 시작'; recordButton.style.backgroundColor = '#28A745';
                 statusSpan.textContent = `측정 완료 (총 ${recordedData.length}개 데이터)`;
-                if (recordedData.length > 0) { 
-                    downloadButton.disabled = false; fitButton.disabled = false;
-                    createOrUpdateSlider(); 
+                if (recordedData.length > 0) {
+                    downloadButton.disabled = false; fitButton.disabled = false; saveTrialButton.disabled = false; cropButton.disabled = false;
+                    createOrUpdateSlider();
                 }
-            }
-        }
-
-        // --- 🔻 [수정] 데이터 수신 함수 (JSON 파싱) 🔻 ---
-        function handleBleNotifications(event) {
-            if (!isRecording) return;
-            const value = new TextDecoder().decode(event.target.value);
-            try {
-                const json = JSON.parse(value);
-                if (json.type === 'imu') {
-                    const { x, y, z } = json.data;
-                    const total = Math.sqrt(x*x + y*y + z*z);
-                    const elapsedTime = (recordedData.length * samplingIntervalMs) / 1000.0;
-                    
-                    const currentData = [];
-                    currentData[COL_MAP.Time] = elapsedTime;
-                    currentData[COL_MAP.X] = x;
-                    currentData[COL_MAP.Y] = y;
-                    currentData[COL_MAP.Z] = z;
-                    currentData[COL_MAP.Total] = total;
-                    recordedData.push(currentData);
-
-                    const newRow = historyTbody.insertRow(0);
-                    newRow.innerHTML = `<td>${elapsedTime.toFixed(3)}</td><td>${x.toFixed(4)}</td><td>${y.toFixed(4)}</td><td>${z.toFixed(4)}</td><td>${total.toFixed(4)}</td>`;
-                    
-                    updateGraphData();
-                }
-            } catch (e) {
-                // JSON이 아닌 다른 데이터(예: 묶음 데이터)가 들어올 수 있으므로, 에러 대신 파싱 시도
-                const dataPackets = value.split(';').filter(p => p);
-                dataPackets.forEach(packet => {
-                    const [xStr, yStr, zStr] = packet.split(',');
-                     if (xStr === undefined || yStr === undefined || zStr === undefined) return;
-                    const x = parseFloat(xStr), y = parseFloat(yStr), z = parseFloat(zStr);
-                    const total = Math.sqrt(x*x + y*y + z*z);
-                    const elapsedTime = (recordedData.length * samplingIntervalMs) / 1000.0;
-                    
-                    const currentData = [];
-                    currentData[COL_MAP.Time] = elapsedTime;
-                    currentData[COL_MAP.X] = x;
-                    currentData[COL_MAP.Y] = y;
-                    currentData[COL_MAP.Z] = z;
-                    currentData[COL_MAP.Total] = total;
-                    recordedData.push(currentData);
-
-                    const newRow = historyTbody.insertRow(0);
-                    newRow.innerHTML = `<td>${elapsedTime.toFixed(3)}</td><td>${x.toFixed(4)}</td><td>${y.toFixed(4)}</td><td>${z.toFixed(4)}</td><td>${total.toFixed(4)}</td>`;
-                });
-                updateGraphData();
             }
         }
         
-        function updateGraphData() {
-            const timeData = recordedData.map(row => row[COL_MAP.Time]);
+        function handleBleNotifications(event) {
+            if (!isRecording) return;
+            const value = new TextDecoder().decode(event.target.value);
+            const dataPackets = value.split(';').filter(p => p);
+            dataPackets.forEach(packet => {
+                const [xStr, yStr, zStr] = packet.split(',');
+                if (xStr === undefined || yStr === undefined || zStr === undefined) return;
+                const x = parseFloat(xStr), y = parseFloat(yStr), z = parseFloat(zStr);
+                const total = Math.sqrt(x * x + y * y + z * z);
+                const elapsedTime = (recordedData.length * samplingIntervalMs) / 1000.0;
+                
+                const currentData = [];
+                currentData[COL_MAP.Time] = elapsedTime;
+                currentData[COL_MAP.X] = x; currentData[COL_MAP.Y] = y; currentData[COL_MAP.Z] = z; currentData[COL_MAP.Total] = total;
+                recordedData.push(currentData);
+            });
+            updateTable();
+            updateChartWithSelectedTrials();
+        }
+
+        // ▼▼▼ [기능 1] 회차 관리 함수들 ▼▼▼
+        function saveCurrentTrial() {
+            if (recordedData.length === 0) {
+                alert("저장할 데이터가 없습니다.");
+                return;
+            }
+            const trialName = prompt("저장할 실험 회차의 이름을 입력하세요:", `실험 ${new Date().toLocaleString()}`);
+            if (trialName) {
+                const trialId = `trial_${Date.now()}`;
+                const trialData = {
+                    name: trialName,
+                    id: trialId,
+                    data: recordedData
+                };
+                savedTrials[trialId] = trialData;
+                localStorage.setItem('accelerometer_trials', JSON.stringify(savedTrials));
+                renderTrialList();
+                alert(`'${trialName}'이(가) 저장되었습니다.`);
+            }
+        }
+
+        function loadTrials() {
+            const trials = localStorage.getItem('accelerometer_trials');
+            if (trials) {
+                savedTrials = JSON.parse(trials);
+            }
+            renderTrialList();
+        }
+
+        function renderTrialList() {
+            trialList.innerHTML = '';
+            // 현재 측정 데이터가 있으면 목록에 추가
+            const currentTrialItem = document.createElement('li');
+            currentTrialItem.innerHTML = `<input type="checkbox" id="currentTrialCheckbox" checked disabled> <label for="currentTrialCheckbox"><b>현재 측정 (${recordedData.length}개)</b></label>`;
+            trialList.appendChild(currentTrialItem);
+
+            Object.values(savedTrials).forEach(trial => {
+                const listItem = document.createElement('li');
+                listItem.innerHTML = `
+                    <input type="checkbox" id="${trial.id}" class="trial-checkbox">
+                    <label for="${trial.id}">${trial.name} (${trial.data.length}개)</label>
+                    <button class="delete-trial-btn" data-id="${trial.id}" style="margin-left: auto;">삭제</button>
+                `;
+                trialList.appendChild(listItem);
+            });
+
+            trialList.querySelectorAll('.trial-checkbox').forEach(cb => cb.addEventListener('change', updateChartWithSelectedTrials));
+            trialList.querySelectorAll('.delete-trial-btn').forEach(btn => btn.addEventListener('click', (e) => {
+                const trialId = e.target.dataset.id;
+                if (confirm(`'${savedTrials[trialId].name}' 회차를 삭제하시겠습니까?`)) {
+                    delete savedTrials[trialId];
+                    localStorage.setItem('accelerometer_trials', JSON.stringify(savedTrials));
+                    renderTrialList();
+                    updateChartWithSelectedTrials();
+                }
+            }));
+        }
+
+        function clearAllTrials() {
+            if (confirm("저장된 모든 회차를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
+                savedTrials = {};
+                localStorage.removeItem('accelerometer_trials');
+                renderTrialList();
+                updateChartWithSelectedTrials();
+            }
+        }
+
+        // ▼▼▼ [기능 2] 데이터 편집(자르기) 함수 ▼▼▼
+        function cropDataToRange() {
+            if (recordedData.length === 0 || !rangeSlider.noUiSlider) {
+                alert("편집할 데이터가 없습니다.");
+                return;
+            }
+            const [startTime, endTime] = rangeSlider.noUiSlider.get().map(Number);
             
-            myChart.data.datasets[DATASET_MAP.X].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.X]}));
-            myChart.data.datasets[DATASET_MAP.Y].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.Y]}));
-            myChart.data.datasets[DATASET_MAP.Z].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.Z]}));
-            myChart.data.datasets[DATASET_MAP.Total].data = timeData.map((t, i) => ({x: t, y: recordedData[i][COL_MAP.Total]}));
+            const cropped = recordedData.filter(row => row[COL_MAP.Time] >= startTime && row[COL_MAP.Time] <= endTime);
+
+            if (cropped.length === 0) {
+                alert("선택된 범위에 데이터가 없습니다.");
+                return;
+            }
+
+            // 시간 정규화 (0초부터 시작하도록)
+            const normalized = cropped.map(row => {
+                const newRow = [...row];
+                newRow[COL_MAP.Time] = newRow[COL_MAP.Time] - startTime;
+                return newRow;
+            });
+
+            recordedData = normalized;
             
+            alert(`${startTime.toFixed(2)}s ~ ${endTime.toFixed(2)}s 구간만 남기고 데이터를 편집했습니다.`);
+
+            // UI 업데이트
+            updateTable();
+            updateChartWithSelectedTrials();
+            createOrUpdateSlider();
+        }
+
+        // --- 차트 및 테이블 업데이트 로직 수정 ---
+        function updateChartWithSelectedTrials() {
+            myChart.data.datasets = []; // 차트 데이터셋 초기화
+
+            const checkedTrials = [{ id: 'current', data: recordedData, name: '현재 측정' }];
+            trialList.querySelectorAll('.trial-checkbox:checked').forEach(cb => {
+                checkedTrials.push(savedTrials[cb.id]);
+            });
+
+            const visibleAxes = AXES.filter(axis => document.querySelector(`input[value="${axis}"]`).checked);
+
+            checkedTrials.forEach((trial, trialIndex) => {
+                if (!trial || trial.data.length === 0) return;
+
+                const color = TRIAL_COLORS[trialIndex % TRIAL_COLORS.length];
+                
+                visibleAxes.forEach(axis => {
+                    const dataset = {
+                        label: `${trial.name} - ${axis}`,
+                        data: trial.data.map(row => ({ x: row[COL_MAP.Time], y: row[COL_MAP[axis]] })),
+                        backgroundColor: color,
+                        borderColor: color,
+                        pointRadius: parseFloat(pointSizeSlider.value),
+                        showLine: showLineCheckbox.checked,
+                        tension: 0.1
+                    };
+                    myChart.data.datasets.push(dataset);
+                });
+            });
+
             myChart.update('none');
         }
 
-        function updateGraphVisibility() {
-            yAxisCheckboxGroup.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                myChart.data.datasets[DATASET_MAP[cb.value]].hidden = !cb.checked;
+        function updateChartStyle() {
+            const newSize = parseFloat(pointSizeSlider.value);
+            const showLine = showLineCheckbox.checked;
+            pointSizeValue.textContent = newSize;
+
+            myChart.data.datasets.forEach(ds => {
+                ds.pointRadius = newSize;
+                ds.showLine = showLine;
             });
+            myChart.update('none');
+        }
+
+        function updateTable() {
+            historyTbody.innerHTML = '';
+            // 테이블은 항상 현재 작업중인 recordedData만 표시
+            recordedData.forEach(row => {
+                const newRow = historyTbody.insertRow(0);
+                newRow.innerHTML = `<td>${row[COL_MAP.Time].toFixed(3)}</td><td>${row[COL_MAP.X].toFixed(4)}</td><td>${row[COL_MAP.Y].toFixed(4)}</td><td>${row[COL_MAP.Z].toFixed(4)}</td><td>${row[COL_MAP.Total].toFixed(4)}</td>`;
+            });
+        }
+        
+        function downloadData() { 
+            if (recordedData.length === 0) {
+                alert("저장할 데이터가 없습니다.");
+                return;
+            }
+            let csvContent = "data:text/csv;charset=utf-8,Time (s),X,Y,Z,Total\n";
+            recordedData.forEach(rowArray => {
+                csvContent += rowArray.map(item => typeof item === 'number' ? item.toFixed(4) : item).join(",") + "\n";
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `accelerometer_data_${new Date().toISOString()}.csv`);
+            document.body.appendChild(link);
+ L           ink.click();
+            document.body.removeChild(link);
+        }
+
+        function createOrUpdateSlider() {
+            if (recordedData.length < 2) return;
+            const minTime = recordedData[0][COL_MAP.Time];
+            const maxTime = recordedData[recordedData.length - 1][COL_MAP.Time];
+
+            rangeSlider.style.display = 'block';
+
+            if (rangeSlider.noUiSlider) {
+                rangeSlider.noUiSlider.updateOptions({ range: { 'min': minTime, 'max': maxTime }, start: [minTime, maxTime] });
+            } else {
+                noUiSlider.create(rangeSlider, {
+                    start: [minTime, maxTime],
+                    connect: true,
+                    range: { 'min': minTime, 'max': maxTime }
+                });
+            }
+
+            rangeSlider.noUiSlider.on('update', (values) => {
+                const [start, end] = values.map(v => parseFloat(v).toFixed(2));
+                rangeValue.textContent = `${start}s ~ ${end}s`;
+                myChart.options.plugins.annotation.annotations.startLine.value = start;
+                myChart.options.plugins.annotation.annotations.startLine.display = true;
+                myChart.options.plugins.annotation.annotations.endLine.value = end;
+                myChart.options.plugins.annotation.annotations.endLine.display = true;
+                myChart.update('none');
+            });
+        }
+        
+        function fitPolynomialToRange() { 
+            if (recordedData.length === 0 || !rangeSlider.noUiSlider) return;
+
+            const [startTime, endTime] = rangeSlider.noUiSlider.get().map(Number);
+            const targetAxis = fitTargetSelect.value;
+            const order = parseInt(polynomialOrderSelect.value);
+
+            const dataToFit = recordedData
+                .filter(row => row[COL_MAP.Time] >= startTime && row[COL_MAP.Time] <= endTime)
+                .map(row => [row[COL_MAP.Time], row[COL_MAP[targetAxis]]]);
+
+            if (dataToFit.length < order + 1) {
+                alert("피팅에 필요한 데이터 포인트가 부족합니다.");
+                return;
+            }
+
+            const result = regression.polynomial(dataToFit, { order: order, precision: 5 });
+            equationSpan.innerHTML = result.string.replace(/\s\*\sx\^/g, "x<sup>").replace(/\s\*\sx/g, "x");
+            r2ValueSpan.textContent = result.r2.toFixed(5);
+
+            const fitDataset = {
+                label: `함수 피팅 (${targetAxis})`,
+                data: result.points.map(p => ({ x: p[0], y: p[1] })),
+                borderColor: 'rgba(255, 159, 64, 1)',
+                type: 'line',
+                fill: false,
+                tension: 0.1,
+                pointRadius: 0
+            };
+            
+            // 기존 피팅 데이터셋이 있으면 교체, 없으면 추가
+            const fitIndex = myChart.data.datasets.findIndex(ds => ds.label.startsWith('함수 피팅'));
+            if (fitIndex > -1) {
+                myChart.data.datasets[fitIndex] = fitDataset;
+            } else {
+                myChart.data.datasets.push(fitDataset);
+            }
             myChart.update();
         }
 
-        function createOrUpdateSlider() { /* 이전과 동일 */ }
-        function fitPolynomialToRange() { /* 이전과 동일 */ }
-        function downloadData() { /* 이전과 동일 */ }
     </script>
 </body>
 </html>
