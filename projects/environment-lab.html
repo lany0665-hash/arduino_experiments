@@ -90,14 +90,16 @@
                 </div>
                 <div class="chart-container" style="height: 455px;"><canvas id="myChart"></canvas></div>
                 <div id="range-slider" style="display:none; margin-top: 10px;"></div>
-                <button id="cropButton" disabled style="margin-top: 10px;">선택 영역만 남기기</button>
+                <div class="graph-controls" style="margin-top: 10px; justify-content: flex-end;">
+                    <button id="cropButton" disabled>선택 영역만 남기기</button>
+                    <button id="deleteRangeButton" disabled>선택 영역 삭제</button>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // --- 1. UI 요소 및 전역 변수 선언 ---
         const connectBleButton = document.getElementById('connectBleButton');
         const disconnectBleButton = document.getElementById('disconnectBleButton');
         const statusSpan = document.getElementById('status');
@@ -117,13 +119,14 @@
         const clearTrialsButton = document.getElementById('clearTrialsButton');
         const rangeSlider = document.getElementById('range-slider');
         const cropButton = document.getElementById('cropButton');
+        const deleteRangeButton = document.getElementById('deleteRangeButton');
         
         let bleDevice, commandCharacteristic;
         let recordedData = [];
         let myChart;
         let isRecording = false;
         let savedTrials = {};
-        let startTime = 0;
+        let envIntervalMs = 1000;
 
         const UART_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
@@ -132,27 +135,25 @@
         const SENSOR_UNITS = { time: '시간 (s)', temp: '온도 (°C)', humidity: '습도 (%)', pressure: '압력 (kPa)', light: '조도' };
         const TRIAL_COLORS = ['rgba(255, 99, 132, 0.8)', 'rgba(54, 162, 235, 0.8)', 'rgba(75, 192, 192, 0.8)', 'rgba(153, 102, 255, 0.8)'];
 
-        // --- 2. 차트 초기화 ---
         myChart = new Chart(chartCanvas, {
             type: 'scatter',
             data: { datasets: [] },
             options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: '시간 (s)' } }, y: { title: { display: true, text: '온도 (°C)' } } } }
         });
 
-        // --- 3. 이벤트 리스너 ---
         window.addEventListener('load', loadTrials);
         connectBleButton.addEventListener('click', connectBLE);
         disconnectBleButton.addEventListener('click', disconnectBLE);
         samplingRateSelect.addEventListener('change', handleRateChange);
         recordButton.addEventListener('click', toggleRecording);
-        xAxisSelect.addEventListener('change', updateChartWithSelectedTrials);
-        yAxisSelect.addEventListener('change', updateChartWithSelectedTrials);
+        xAxisSelect.addEventListener('change', redrawChart);
+        yAxisSelect.addEventListener('change', redrawChart);
         saveTrialButton.addEventListener('click', saveCurrentTrial);
         clearTrialsButton.addEventListener('click', clearAllTrials);
         cropButton.addEventListener('click', cropDataToRange);
+        deleteRangeButton.addEventListener('click', deleteDataInRange);
         downloadButton.addEventListener('click', downloadData);
 
-        // --- 4. 함수 정의 ---
         async function connectBLE() {
             try {
                 const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [UART_SERVICE_UUID], namePrefix: 'Sensor-' }] });
@@ -179,7 +180,6 @@
         function disconnectBLE() {
             if (bleDevice && bleDevice.gatt.connected) {
                 if(isRecording) toggleRecording();
-                commandCharacteristic.writeValue(new TextEncoder().encode("STOP"));
                 bleDevice.gatt.disconnect();
             }
         }
@@ -189,36 +189,35 @@
             connectBleButton.style.display = 'inline-block';
             disconnectBleButton.style.display = 'none';
             recordButton.disabled = true;
-            tempValue.textContent = '--'; humidityValue.textContent = '--'; pressureValue.textContent = '--'; lightValue.textContent = '--';
         }
         
         async function handleRateChange() {
+            envIntervalMs = parseInt(samplingRateSelect.value);
             if (bleDevice && bleDevice.gatt.connected) {
-                const envIntervalMs = parseInt(samplingRateSelect.value);
                 await commandCharacteristic.writeValue(new TextEncoder().encode(`SET_ENV_RATE:${envIntervalMs}`));
             }
         }
 
         function toggleRecording() {
             isRecording = !isRecording;
+            const isDataPresent = recordedData.length > 0;
             if (isRecording) {
-                recordedData = []; startTime = 0;
-                updateTable();
+                recordedData = [];
+                historyTbody.innerHTML = '';
                 recordButton.textContent = '측정 중지'; recordButton.style.backgroundColor = '#DC3545';
                 statusSpan.textContent = `측정 중...`;
-                downloadButton.disabled = true; saveTrialButton.disabled = true; cropButton.disabled = true;
+                downloadButton.disabled = true; saveTrialButton.disabled = true; cropButton.disabled = true; deleteRangeButton.disabled = true;
                 if(rangeSlider.noUiSlider) rangeSlider.noUiSlider.destroy();
                 rangeSlider.style.display = 'none';
             } else {
                 recordButton.textContent = '측정 시작'; recordButton.style.backgroundColor = '#28A745';
                 statusSpan.textContent = `측정 완료 (총 ${recordedData.length}개 데이터)`;
-                if (recordedData.length > 0) {
-                    downloadButton.disabled = false; saveTrialButton.disabled = false; cropButton.disabled = false;
-                    createOrUpdateSlider();
-                }
+                downloadButton.disabled = !isDataPresent; saveTrialButton.disabled = !isDataPresent; 
+                cropButton.disabled = !isDataPresent; deleteRangeButton.disabled = !isDataPresent;
+                if (isDataPresent) createOrUpdateSlider();
             }
             renderTrialList();
-            updateChartWithSelectedTrials();
+            redrawChart();
         }
 
         function handleNotifications(event) {
@@ -233,17 +232,31 @@
                     lightValue.textContent = data.light;
                     
                     if (isRecording) {
-                        const timestampMs = json.ts;
-                        if (recordedData.length === 0) startTime = timestampMs;
-                        
                         const newDataPoint = {
-                            time: (timestampMs - startTime) / 1000.0,
-                            timestamp: timestampMs,
+                            id: Date.now(),
+                            time: recordedData.length * (envIntervalMs / 1000.0),
+                            timestamp: json.ts,
                             ...data
                         };
                         recordedData.push(newDataPoint);
-                        updateTable();
-                        updateChartWithSelectedTrials();
+                        
+                        const newRow = historyTbody.insertRow(0);
+                        addTableRow(newRow, newDataPoint);
+
+                        if(historyTbody.rows.length > 500) { // [수정 1] 테이블 길이 500으로 제한
+                            historyTbody.deleteRow(-1);
+                        }
+
+                        const trialsToShow = getVisibleTrials();
+                        if (trialsToShow.some(t => t.id === 'current')) {
+                            const dataset = myChart.data.datasets.find(ds => ds.label === '현재 측정');
+                            if(dataset) {
+                                const xKey = xAxisSelect.value;
+                                const yKey = yAxisSelect.value;
+                                dataset.data.push({ x: newDataPoint[xKey], y: newDataPoint[yKey] });
+                                myChart.update('none');
+                            }
+                        }
                     }
                 }
             } catch(e) { console.error("Invalid JSON:", value); }
@@ -254,7 +267,7 @@
             const trialName = prompt("저장할 실험 회차의 이름을 입력하세요:", `환경실험 ${new Date().toLocaleString()}`);
             if (trialName) {
                 const trialId = `env_trial_${Date.now()}`;
-                savedTrials[trialId] = { name: trialName, id: trialId, data: recordedData };
+                savedTrials[trialId] = { name: trialName, id: trialId, data: JSON.parse(JSON.stringify(recordedData)) };
                 localStorage.setItem('env_sensor_trials', JSON.stringify(savedTrials));
                 renderTrialList();
             }
@@ -264,6 +277,7 @@
             const trials = localStorage.getItem('env_sensor_trials');
             if (trials) savedTrials = JSON.parse(trials);
             renderTrialList();
+            redrawChart();
         }
 
         function renderTrialList() {
@@ -278,15 +292,15 @@
                 trialList.appendChild(li);
             });
             
-            trialList.querySelector('#currentTrialCheckbox').addEventListener('change', updateChartWithSelectedTrials);
-            trialList.querySelectorAll('.trial-checkbox').forEach(cb => cb.addEventListener('change', updateChartWithSelectedTrials));
+            trialList.querySelector('#currentTrialCheckbox').addEventListener('change', redrawChart);
+            trialList.querySelectorAll('.trial-checkbox').forEach(cb => cb.addEventListener('change', redrawChart));
             trialList.querySelectorAll('.delete-trial-btn').forEach(btn => btn.addEventListener('click', (e) => {
                 const id = e.target.dataset.id;
                 if (confirm(`'${savedTrials[id].name}' 회차를 삭제하시겠습니까?`)) {
                     delete savedTrials[id];
                     localStorage.setItem('env_sensor_trials', JSON.stringify(savedTrials));
                     renderTrialList();
-                    updateChartWithSelectedTrials();
+                    redrawChart();
                 }
             }));
         }
@@ -296,7 +310,7 @@
                 savedTrials = {};
                 localStorage.removeItem('env_sensor_trials');
                 renderTrialList();
-                updateChartWithSelectedTrials();
+                redrawChart();
             }
         }
         
@@ -307,31 +321,45 @@
             const cropped = recordedData.filter(d => d.time >= startTime && d.time <= endTime);
             if (cropped.length === 0) return alert("선택된 범위에 데이터가 없습니다.");
 
-            const firstTimestamp = cropped[0].timestamp;
-            const normalized = cropped.map(d => ({ ...d, time: (d.timestamp - firstTimestamp) / 1000.0 }));
-
-            recordedData = normalized;
-            startTime = recordedData.length > 0 ? recordedData[0].timestamp : 0;
+            const firstTime = cropped[0].time;
+            recordedData = cropped.map(d => ({ ...d, time: d.time - firstTime }));
             
             alert(`데이터를 편집했습니다. (총 ${recordedData.length}개)`);
-            updateTable();
-            renderTrialList();
-            updateChartWithSelectedTrials();
-            createOrUpdateSlider();
+            renderTable(); renderTrialList(); redrawChart(); createOrUpdateSlider();
         }
 
-        function updateChartWithSelectedTrials() {
+        // [수정 2] 선택 영역 삭제 함수 추가
+        function deleteDataInRange() {
+            if (recordedData.length === 0 || !rangeSlider.noUiSlider) return alert("삭제할 데이터가 없습니다.");
+            const [startTime, endTime] = rangeSlider.noUiSlider.get().map(Number);
+            
+            const originalCount = recordedData.length;
+            recordedData = recordedData.filter(d => d.time < startTime || d.time > endTime);
+            const deletedCount = originalCount - recordedData.length;
+
+            if (deletedCount === 0) return alert("선택된 범위에 삭제할 데이터가 없습니다.");
+
+            alert(`${deletedCount}개의 데이터를 삭제했습니다.`);
+            renderTable(); renderTrialList(); redrawChart(); createOrUpdateSlider();
+        }
+
+        function getVisibleTrials() {
+            const trialsToShow = [];
+            if (document.getElementById('currentTrialCheckbox')?.checked) {
+                trialsToShow.push({ id: 'current', data: recordedData, name: '현재 측정' });
+            }
+            trialList.querySelectorAll('.trial-checkbox:checked').forEach(cb => trialsToShow.push(savedTrials[cb.id]));
+            return trialsToShow;
+        }
+
+        function redrawChart() {
             const xKey = xAxisSelect.value;
             const yKey = yAxisSelect.value;
             myChart.options.scales.x.title.text = SENSOR_UNITS[xKey];
             myChart.options.scales.y.title.text = SENSOR_UNITS[yKey];
 
             myChart.data.datasets = [];
-            const trialsToShow = [];
-            if (document.getElementById('currentTrialCheckbox')?.checked) {
-                trialsToShow.push({ id: 'current', data: recordedData, name: '현재 측정' });
-            }
-            trialList.querySelectorAll('.trial-checkbox:checked').forEach(cb => trialsToShow.push(savedTrials[cb.id]));
+            const trialsToShow = getVisibleTrials();
 
             trialsToShow.forEach((trial, trialIndex) => {
                 if (!trial || trial.data.length === 0) return;
@@ -346,19 +374,23 @@
             myChart.update();
         }
 
-        function updateTable() {
+        function addTableRow(row, data) {
+             row.innerHTML = `<td>${data.time.toFixed(2)}</td><td>${data.temp.toFixed(2)}</td><td>${data.humidity.toFixed(2)}</td><td>${data.pressure.toFixed(2)}</td><td>${data.light}</td>`;
+        }
+        
+        function renderTable() {
             historyTbody.innerHTML = '';
             [...recordedData].reverse().forEach(d => {
                 const row = historyTbody.insertRow(0);
-                row.innerHTML = `<td>${d.time.toFixed(2)}</td><td>${d.temp.toFixed(2)}</td><td>${d.humidity.toFixed(2)}</td><td>${d.pressure.toFixed(2)}</td><td>${d.light}</td>`;
+                addTableRow(row, d);
             });
         }
         
         function downloadData() {
             if (recordedData.length === 0) return alert("다운로드할 데이터가 없습니다.");
-            let csvContent = "data:text/csv;charset=utf-8,Time (s),Temperature,Humidity,Pressure,Light,Timestamp (ms)\n";
+            let csvContent = "data:text/csv;charset=utf-8,ID,Time (s),Temperature,Humidity,Pressure,Light,Timestamp (ms)\n";
             recordedData.forEach(d => {
-                csvContent += `${d.time.toFixed(3)},${d.temp.toFixed(2)},${d.humidity.toFixed(2)},${d.pressure.toFixed(2)},${d.light},${d.timestamp}\n`;
+                csvContent += `${d.id},${d.time.toFixed(3)},${d.temp.toFixed(2)},${d.humidity.toFixed(2)},${d.pressure.toFixed(2)},${d.light},${d.timestamp}\n`;
             });
             const link = document.createElement("a");
             link.href = encodeURI(csvContent);
@@ -369,7 +401,11 @@
         }
 
         function createOrUpdateSlider() {
-            if (recordedData.length < 2) return rangeSlider.style.display = 'none';
+            if (recordedData.length < 2) {
+                if(rangeSlider.noUiSlider) rangeSlider.noUiSlider.destroy();
+                rangeSlider.style.display = 'none';
+                return;
+            }
             
             const minTime = recordedData[0].time;
             const maxTime = recordedData[recordedData.length - 1].time;
