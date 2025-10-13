@@ -44,6 +44,7 @@
         .trial-list button { padding: 2px 8px; font-size: 0.8em; }
         .trial-controls { display: flex; gap: 10px; margin-top: 10px; }
         .graph-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 15px; margin-top: 10px; }
+        .axis-range-controls input { padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -111,6 +112,18 @@
                     </div>
                     <button id="resetZoomButton">줌 리셋</button>
                 </div>
+                <div class="graph-controls axis-range-controls">
+                    <span>축 범위 설정:</span>
+                    <label for="xMin">X축:</label>
+                    <input type="number" id="xMin" placeholder="최소" style="width: 70px;">
+                    <span>~</span>
+                    <input type="number" id="xMax" placeholder="최대" style="width: 70px;">
+                    <label for="yMin" style="margin-left: 15px;">Y축:</label>
+                    <input type="number" id="yMin" placeholder="최소" style="width: 70px;">
+                    <span>~</span>
+                    <input type="number" id="yMax" placeholder="최대" style="width: 70px;">
+                    <button id="applyRangeButton" style="margin-left: 10px;">범위 적용</button>
+                </div>
                  <div class="graph-controls fit-controls">
                     <span>피팅/편집 범위: <b id="range-value"></b></span>
                     <button id="cropButton" disabled style="margin-left: 10px;">선택 영역만 남기기</button>
@@ -156,6 +169,11 @@
         const saveTrialButton = document.getElementById('saveTrialButton');
         const clearTrialsButton = document.getElementById('clearTrialsButton');
         const cropButton = document.getElementById('cropButton');
+        const xMinInput = document.getElementById('xMin');
+        const xMaxInput = document.getElementById('xMax');
+        const yMinInput = document.getElementById('yMin');
+        const yMaxInput = document.getElementById('yMax');
+        const applyRangeButton = document.getElementById('applyRangeButton');
 
         let recordedData = []; 
         let isRecording = false;
@@ -184,7 +202,21 @@
         disconnectBleButton.addEventListener('click', disconnectBLE);
         samplingRateSelect.addEventListener('change', handleRateChange);
         recordButton.addEventListener('click', toggleRecording);
-        resetZoomButton.addEventListener('click', () => myChart.resetZoom());
+        
+        resetZoomButton.addEventListener('click', () => {
+            delete myChart.options.scales.x.min;
+            delete myChart.options.scales.x.max;
+            delete myChart.options.scales.y.min;
+            delete myChart.options.scales.y.max;
+            myChart.update();
+            myChart.resetZoom();
+
+            xMinInput.value = '';
+            xMaxInput.value = '';
+            yMinInput.value = '';
+            yMaxInput.value = '';
+        });
+
         fitButton.addEventListener('click', fitPolynomialToRange);
         downloadButton.addEventListener('click', downloadData);
         yAxisCheckboxGroup.addEventListener('change', updateChartWithSelectedTrials);
@@ -193,6 +225,24 @@
         saveTrialButton.addEventListener('click', saveCurrentTrial);
         clearTrialsButton.addEventListener('click', clearAllTrials);
         cropButton.addEventListener('click', cropDataToRange);
+        
+        applyRangeButton.addEventListener('click', applyAxisRange);
+
+        function applyAxisRange() {
+            const scales = myChart.options.scales;
+            
+            const xMin = parseFloat(xMinInput.value);
+            const xMax = parseFloat(xMaxInput.value);
+            const yMin = parseFloat(yMinInput.value);
+            const yMax = parseFloat(yMaxInput.value);
+
+            if (!isNaN(xMin)) scales.x.min = xMin; else delete scales.x.min;
+            if (!isNaN(xMax)) scales.x.max = xMax; else delete scales.x.max;
+            if (!isNaN(yMin)) scales.y.min = yMin; else delete scales.y.min;
+            if (!isNaN(yMax)) scales.y.max = yMax; else delete scales.y.max;
+
+            myChart.update();
+        }
 
         async function connectBLE() {
             try {
@@ -254,7 +304,7 @@
                 rangeSlider.style.display = 'none';
                 statusSpan.textContent = `측정 중... (${samplingRateSelect.selectedOptions[0].text})`;
                 
-                updateChartWithSelectedTrials(); // 차트를 빈 상태로 다시 그림
+                updateChartWithSelectedTrials();
             } else {
                 recordButton.textContent = '측정 시작'; recordButton.style.backgroundColor = '#28A745';
                 statusSpan.textContent = `측정 완료 (총 ${recordedData.length}개 데이터)`;
