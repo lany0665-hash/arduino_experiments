@@ -44,7 +44,6 @@
         .trial-list button { padding: 2px 8px; font-size: 0.8em; }
         .trial-controls { display: flex; gap: 10px; margin-top: 10px; }
         .graph-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 15px; margin-top: 10px; }
-        .axis-range-controls input { padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -95,7 +94,6 @@
                 <h2>그래프 시각화 및 함수 피팅</h2>
                 <div class="chart-wrapper">
                     <div class="chart-container"><canvas id="myChart"></canvas></div>
-                    <div id="range-slider" style="display:none; margin-top: 10px;"></div>
                 </div>
                 <div class="graph-controls">
                     <span>Y축 선택:</span>
@@ -112,22 +110,10 @@
                     </div>
                     <button id="resetZoomButton">줌 리셋</button>
                 </div>
-                <div class="graph-controls axis-range-controls">
-                    <span>축 범위 설정:</span>
-                    <label for="xMin">X축:</label>
-                    <input type="number" id="xMin" placeholder="최소" style="width: 70px;">
-                    <span>~</span>
-                    <input type="number" id="xMax" placeholder="최대" style="width: 70px;">
-                    <label for="yMin" style="margin-left: 15px;">Y축:</label>
-                    <input type="number" id="yMin" placeholder="최소" style="width: 70px;">
-                    <span>~</span>
-                    <input type="number" id="yMax" placeholder="최대" style="width: 70px;">
-                    <button id="applyRangeButton" style="margin-left: 10px;">범위 적용</button>
-                </div>
                  <div class="graph-controls fit-controls">
-                    <span>피팅/편집 범위: <b id="range-value"></b></span>
-                    <button id="cropButton" disabled style="margin-left: 10px;">선택 영역만 남기기</button>
-                    <select id="fitTargetSelect" style="margin-left: auto;">
+                    <span><b>* 분석/편집할 영역을 그래프에서 드래그하세요.</b></span>
+                    <button id="cropButton" disabled style="margin-left: auto;">선택 영역만 남기기</button>
+                    <select id="fitTargetSelect">
                         <option value="X">X 기준</option> <option value="Y">Y 기준</option> <option value="Z">Z 기준</option> <option value="Total">Total 기준</option>
                     </select>
                     <select id="polynomialOrderSelect">
@@ -160,8 +146,6 @@
         const chartCanvas = document.getElementById('myChart');
         const polynomialOrderSelect = document.getElementById('polynomialOrderSelect');
         const fitTargetSelect = document.getElementById('fitTargetSelect');
-        const rangeSlider = document.getElementById('range-slider');
-        const rangeValue = document.getElementById('range-value');
         const pointSizeSlider = document.getElementById('pointSizeSlider');
         const pointSizeValue = document.getElementById('pointSizeValue');
         const showLineCheckbox = document.getElementById('showLineCheckbox');
@@ -169,11 +153,6 @@
         const saveTrialButton = document.getElementById('saveTrialButton');
         const clearTrialsButton = document.getElementById('clearTrialsButton');
         const cropButton = document.getElementById('cropButton');
-        const xMinInput = document.getElementById('xMin');
-        const xMaxInput = document.getElementById('xMax');
-        const yMinInput = document.getElementById('yMin');
-        const yMaxInput = document.getElementById('yMax');
-        const applyRangeButton = document.getElementById('applyRangeButton');
 
         let recordedData = []; 
         let isRecording = false;
@@ -194,7 +173,32 @@
         myChart = new Chart(chartCanvas, {
             type: 'scatter',
             data: { datasets: [] },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'linear', title: { display: true, text: 'Time (s)' } }, y: { title: { display: true, text: 'Acceleration (g)' } } }, plugins: { zoom: { pan: { enabled: true, mode: 'x', modifierKey: 'shift' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } }, annotation: { annotations: { startLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false }, endLine: { type: 'line', scaleID: 'x', value: 0, borderColor: 'rgba(255, 99, 132, 0.8)', borderWidth: 2, borderDash: [6, 6], display: false } } } } }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                scales: { 
+                    x: { type: 'linear', title: { display: true, text: 'Time (s)' } }, 
+                    y: { title: { display: true, text: 'Acceleration (g)' } } 
+                }, 
+                plugins: { 
+                    zoom: { 
+                        pan: { 
+                            enabled: true, 
+                            mode: 'xy',
+                            modifierKey: 'shift' // Shift + 드래그로 이동
+                        }, 
+                        zoom: { 
+                            drag: { 
+                                enabled: true, // 드래그로 줌 선택 활성화
+                                backgroundColor: 'rgba(75, 192, 192, 0.3)'
+                            },
+                            wheel: { enabled: true }, 
+                            pinch: { enabled: true }, 
+                            mode: 'xy' 
+                        } 
+                    } 
+                } 
+            }
         });
 
         window.addEventListener('load', loadTrials);
@@ -202,21 +206,7 @@
         disconnectBleButton.addEventListener('click', disconnectBLE);
         samplingRateSelect.addEventListener('change', handleRateChange);
         recordButton.addEventListener('click', toggleRecording);
-        
-        resetZoomButton.addEventListener('click', () => {
-            delete myChart.options.scales.x.min;
-            delete myChart.options.scales.x.max;
-            delete myChart.options.scales.y.min;
-            delete myChart.options.scales.y.max;
-            myChart.update();
-            myChart.resetZoom();
-
-            xMinInput.value = '';
-            xMaxInput.value = '';
-            yMinInput.value = '';
-            yMaxInput.value = '';
-        });
-
+        resetZoomButton.addEventListener('click', () => myChart.resetZoom());
         fitButton.addEventListener('click', fitPolynomialToRange);
         downloadButton.addEventListener('click', downloadData);
         yAxisCheckboxGroup.addEventListener('change', updateChartWithSelectedTrials);
@@ -225,24 +215,6 @@
         saveTrialButton.addEventListener('click', saveCurrentTrial);
         clearTrialsButton.addEventListener('click', clearAllTrials);
         cropButton.addEventListener('click', cropDataToRange);
-        
-        applyRangeButton.addEventListener('click', applyAxisRange);
-
-        function applyAxisRange() {
-            const scales = myChart.options.scales;
-            
-            const xMin = parseFloat(xMinInput.value);
-            const xMax = parseFloat(xMaxInput.value);
-            const yMin = parseFloat(yMinInput.value);
-            const yMax = parseFloat(yMaxInput.value);
-
-            if (!isNaN(xMin)) scales.x.min = xMin; else delete scales.x.min;
-            if (!isNaN(xMax)) scales.x.max = xMax; else delete scales.x.max;
-            if (!isNaN(yMin)) scales.y.min = yMin; else delete scales.y.min;
-            if (!isNaN(yMax)) scales.y.max = yMax; else delete scales.y.max;
-
-            myChart.update();
-        }
 
         async function connectBLE() {
             try {
@@ -300,17 +272,13 @@
                 equationSpan.textContent = ''; r2ValueSpan.textContent = '';
                 recordButton.textContent = '측정 중지'; recordButton.style.backgroundColor = '#DC3545';
                 downloadButton.disabled = true; fitButton.disabled = true; saveTrialButton.disabled = true; cropButton.disabled = true;
-                if (rangeSlider.noUiSlider) rangeSlider.noUiSlider.destroy();
-                rangeSlider.style.display = 'none';
                 statusSpan.textContent = `측정 중... (${samplingRateSelect.selectedOptions[0].text})`;
-                
                 updateChartWithSelectedTrials();
             } else {
                 recordButton.textContent = '측정 시작'; recordButton.style.backgroundColor = '#28A745';
                 statusSpan.textContent = `측정 완료 (총 ${recordedData.length}개 데이터)`;
                 if (recordedData.length > 0) {
                     downloadButton.disabled = false; fitButton.disabled = false; saveTrialButton.disabled = false; cropButton.disabled = false;
-                    createOrUpdateSlider();
                 }
             }
         }
@@ -418,8 +386,14 @@
         }
 
         function cropDataToRange() {
-            if (recordedData.length === 0 || !rangeSlider.noUiSlider) return alert("편집할 데이터가 없습니다.");
-            const [startTimeVal, endTimeVal] = rangeSlider.noUiSlider.get().map(Number);
+            if (recordedData.length === 0) return alert("편집할 데이터가 없습니다.");
+            
+            const startTimeVal = myChart.scales.x.min;
+            const endTimeVal = myChart.scales.x.max;
+
+            if (startTimeVal === undefined || endTimeVal === undefined) {
+                return alert("먼저 그래프에서 편집할 영역을 드래그하여 선택해주세요.");
+            }
             
             const cropped = recordedData.filter(row => row[COL_MAP.Time] >= startTimeVal && row[COL_MAP.Time] <= endTimeVal);
             if (cropped.length === 0) return alert("선택된 범위에 데이터가 없습니다.");
@@ -437,8 +411,8 @@
             alert(`데이터를 편집했습니다. (총 ${recordedData.length}개)`);
             updateTable();
             renderTrialList();
+            myChart.resetZoom(); // 편집 후 줌 리셋
             updateChartWithSelectedTrials();
-            createOrUpdateSlider();
         }
 
         function updateChartWithSelectedTrials() {
@@ -505,34 +479,17 @@
             link.click();
             document.body.removeChild(link);
         }
-
-        function createOrUpdateSlider() {
-            if (recordedData.length < 2) {
-                rangeSlider.style.display = 'none';
-                return;
-            };
-            const minTime = recordedData[0][COL_MAP.Time];
-            const maxTime = recordedData[recordedData.length - 1][COL_MAP.Time];
-
-            rangeSlider.style.display = 'block';
-            if (rangeSlider.noUiSlider) {
-                rangeSlider.noUiSlider.updateOptions({ range: { 'min': minTime, 'max': maxTime }, start: [minTime, maxTime] });
-            } else {
-                noUiSlider.create(rangeSlider, { start: [minTime, maxTime], connect: true, range: { 'min': minTime, 'max': maxTime } });
-            }
-            rangeSlider.noUiSlider.on('update', (values) => {
-                const [start, end] = values.map(v => parseFloat(v).toFixed(2));
-                rangeValue.textContent = `${start}s ~ ${end}s`;
-                const annotations = myChart.options.plugins.annotation.annotations;
-                annotations.startLine.value = start; annotations.startLine.display = true;
-                annotations.endLine.value = end; annotations.endLine.display = true;
-                myChart.update('none');
-            });
-        }
         
         function fitPolynomialToRange() {
-            if (recordedData.length === 0 || !rangeSlider.noUiSlider) return;
-            const [startTimeVal, endTimeVal] = rangeSlider.noUiSlider.get().map(Number);
+            if (recordedData.length === 0) return;
+            
+            const startTimeVal = myChart.scales.x.min;
+            const endTimeVal = myChart.scales.x.max;
+            
+            if (startTimeVal === undefined || endTimeVal === undefined) {
+                return alert("먼저 그래프에서 피팅할 영역을 드래그하여 선택해주세요.");
+            }
+
             const targetAxis = fitTargetSelect.value;
             const order = parseInt(polynomialOrderSelect.value);
 
