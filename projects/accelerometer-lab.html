@@ -154,13 +154,18 @@
         const clearTrialsButton = document.getElementById('clearTrialsButton');
         const cropButton = document.getElementById('cropButton');
 
-        let recordedData = []; 
+        let recordedData = [];
         let isRecording = false;
         let myChart;
         let commandCharacteristic;
         let bleDevice;
         let savedTrials = {};
         let startTime = 0;
+        
+        // 그래프 드래그 상태 관리를 위한 변수
+        let draggedTrialId = null;
+        let initialDragXValue = 0;
+        let initialTimeOffset = 0;
 
         const UART_SERVICE_UUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
@@ -182,20 +187,8 @@
                 }, 
                 plugins: { 
                     zoom: { 
-                        pan: { 
-                            enabled: true, 
-                            mode: 'xy',
-                            modifierKey: 'shift' // Shift + 드래그로 이동
-                        }, 
-                        zoom: { 
-                            drag: { 
-                                enabled: true, // 드래그로 줌 선택 활성화
-                                backgroundColor: 'rgba(75, 192, 192, 0.3)'
-                            },
-                            wheel: { enabled: true }, 
-                            pinch: { enabled: true }, 
-                            mode: 'xy' 
-                        } 
+                        pan: { enabled: true, mode: 'xy', modifierKey: 'shift' }, 
+                        zoom: { drag: { enabled: true, backgroundColor: 'rgba(75, 192, 192, 0.3)' }, wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' } 
                     } 
                 } 
             }
@@ -215,6 +208,13 @@
         saveTrialButton.addEventListener('click', saveCurrentTrial);
         clearTrialsButton.addEventListener('click', clearAllTrials);
         cropButton.addEventListener('click', cropDataToRange);
+        trialList.addEventListener('click', handleTrialListClick);
+
+        // 차트 캔버스에 마우스 이벤트 리스너 추가 (드래그 기능)
+        chartCanvas.addEventListener('mousedown', handleDragStart);
+        chartCanvas.addEventListener('mousemove', handleDrag);
+        chartCanvas.addEventListener('mouseup', handleDragEnd);
+        chartCanvas.addEventListener('mouseleave', handleDragEnd);
 
         async function connectBLE() {
             try {
@@ -332,13 +332,58 @@
             
             myChart.update('none');
         }
+        
+        function handleDragStart(e) {
+            if (e.button !== 0) return;
+            const points = myChart.getElementsAtEventForMode(e, 'nearest', { intersect: true }, true);
+            
+            if (points.length) {
+                const firstPoint = points[0];
+                const dataset = myChart.data.datasets[firstPoint.datasetIndex];
+                const trialId = dataset.trialId;
+                
+                if (trialId && savedTrials[trialId] && !draggedTrialId) {
+                    draggedTrialId = trialId;
+                    initialTimeOffset = savedTrials[trialId].timeOffset || 0;
+                    initialDragXValue = myChart.scales.x.getValueForPixel(e.offsetX);
+                    
+                    myChart.options.plugins.zoom.pan.enabled = false;
+                    myChart.options.plugins.zoom.zoom.drag.enabled = false;
+                    myChart.update('none');
+                    e.target.style.cursor = 'grabbing';
+                }
+            }
+        }
+
+        function handleDrag(e) {
+            if (draggedTrialId) {
+                const currentXValue = myChart.scales.x.getValueForPixel(e.offsetX);
+                const timeDelta = currentXValue - initialDragXValue;
+
+                savedTrials[draggedTrialId].timeOffset = initialTimeOffset + timeDelta;
+                updateChartWithSelectedTrials();
+            }
+        }
+
+        function handleDragEnd(e) {
+            if (draggedTrialId) {
+                localStorage.setItem('accelerometer_trials', JSON.stringify(savedTrials));
+                renderTrialList();
+                draggedTrialId = null;
+
+                myChart.options.plugins.zoom.pan.enabled = true;
+                myChart.options.plugins.zoom.zoom.drag.enabled = true;
+                myChart.update('none');
+                e.target.style.cursor = 'default';
+            }
+        }
 
         function saveCurrentTrial() {
             if (recordedData.length === 0) return alert("저장할 데이터가 없습니다.");
             const trialName = prompt("저장할 실험 회차의 이름을 입력하세요:", `실험 ${new Date().toLocaleString()}`);
             if (trialName) {
                 const trialId = `trial_${Date.now()}`;
-                const trialData = { name: trialName, id: trialId, data: JSON.parse(JSON.stringify(recordedData)) };
+                const trialData = { name: trialName, id: trialId, data: JSON.parse(JSON.stringify(recordedData)), timeOffset: 0 };
                 savedTrials[trialId] = trialData;
                 localStorage.setItem('accelerometer_trials', JSON.stringify(savedTrials));
                 renderTrialList();
@@ -359,21 +404,43 @@
 
             Object.values(savedTrials).forEach(trial => {
                 const li = document.createElement('li');
-                li.innerHTML = `<input type="checkbox" id="${trial.id}" class="trial-checkbox"> <label for="${trial.id}">${trial.name} (${trial.data.length}개)</label> <button class="delete-trial-btn" data-id="${trial.id}" style="margin-left: auto;">삭제</button>`;
+                const offset = trial.timeOffset || 0;
+                li.innerHTML = `
+                    <input type="checkbox" id="${trial.id}" class="trial-checkbox"> 
+                    <label for="${trial.id}">${trial.name} (${trial.data.length}개)</label>
+                    <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 0.9em; color: #555;">(Offset: ${offset.toFixed(2)}s)</span>
+                        <button class="reset-offset-btn" data-id="${trial.id}" title="오프셋 초기화">Reset</button>
+                        <button class="delete-trial-btn" data-id="${trial.id}">삭제</button>
+                    </div>
+                `;
                 trialList.appendChild(li);
             });
             
             trialList.querySelector('#currentTrialCheckbox').addEventListener('change', updateChartWithSelectedTrials);
             trialList.querySelectorAll('.trial-checkbox').forEach(cb => cb.addEventListener('change', updateChartWithSelectedTrials));
-            trialList.querySelectorAll('.delete-trial-btn').forEach(btn => btn.addEventListener('click', (e) => {
-                const id = e.target.dataset.id;
-                if (confirm(`'${savedTrials[id].name}' 회차를 삭제하시겠습니까?`)) {
-                    delete savedTrials[id];
-                    localStorage.setItem('accelerometer_trials', JSON.stringify(savedTrials));
-                    renderTrialList();
-                    updateChartWithSelectedTrials();
+        }
+
+        function handleTrialListClick(event) {
+            const target = event.target;
+            const trialId = target.dataset.id;
+            if (!trialId || !savedTrials[trialId]) return;
+
+            if (target.classList.contains('reset-offset-btn')) {
+                savedTrials[trialId].timeOffset = 0;
+            } else if (target.classList.contains('delete-trial-btn')) {
+                if (confirm(`'${savedTrials[trialId].name}' 회차를 삭제하시겠습니까?`)) {
+                    delete savedTrials[trialId];
+                } else {
+                    return;
                 }
-            }));
+            } else {
+                return;
+            }
+
+            localStorage.setItem('accelerometer_trials', JSON.stringify(savedTrials));
+            renderTrialList();
+            updateChartWithSelectedTrials();
         }
 
         function clearAllTrials() {
@@ -387,31 +454,25 @@
 
         function cropDataToRange() {
             if (recordedData.length === 0) return alert("편집할 데이터가 없습니다.");
-            
             const startTimeVal = myChart.scales.x.min;
             const endTimeVal = myChart.scales.x.max;
-
-            if (startTimeVal === undefined || endTimeVal === undefined) {
-                return alert("먼저 그래프에서 편집할 영역을 드래그하여 선택해주세요.");
-            }
+            if (startTimeVal === undefined || endTimeVal === undefined) return alert("먼저 그래프에서 편집할 영역을 드래그하여 선택해주세요.");
             
             const cropped = recordedData.filter(row => row[COL_MAP.Time] >= startTimeVal && row[COL_MAP.Time] <= endTimeVal);
             if (cropped.length === 0) return alert("선택된 범위에 데이터가 없습니다.");
-
+            
             const firstTimestamp = cropped[0][COL_MAP.Timestamp];
-            const normalized = cropped.map(row => {
+            recordedData = cropped.map(row => {
                 const newRow = [...row];
                 newRow[COL_MAP.Time] = (newRow[COL_MAP.Timestamp] - firstTimestamp) / 1000.0;
                 return newRow;
             });
-
-            recordedData = normalized;
             startTime = recordedData.length > 0 ? recordedData[0][COL_MAP.Timestamp] : 0;
             
             alert(`데이터를 편집했습니다. (총 ${recordedData.length}개)`);
             updateTable();
             renderTrialList();
-            myChart.resetZoom(); // 편집 후 줌 리셋
+            myChart.resetZoom(); 
             updateChartWithSelectedTrials();
         }
 
@@ -420,7 +481,7 @@
             const trialsToShow = [];
             
             if (document.getElementById('currentTrialCheckbox')?.checked) {
-                trialsToShow.push({ id: 'current', data: recordedData, name: '현재 측정' });
+                trialsToShow.push({ id: 'current', data: recordedData, name: '현재 측정', timeOffset: 0 });
             }
             
             trialList.querySelectorAll('.trial-checkbox:checked').forEach(cb => {
@@ -432,17 +493,22 @@
             trialsToShow.forEach((trial, trialIndex) => {
                 if (!trial || !trial.data) return;
                 const color = TRIAL_COLORS[trialIndex % TRIAL_COLORS.length];
+                const offset = trial.timeOffset || 0;
+
                 visibleAxes.forEach(axis => {
                     myChart.data.datasets.push({
+                        trialId: trial.id, 
                         label: `${trial.name} - ${axis}`,
-                        data: trial.data.map(row => ({ x: row[COL_MAP.Time], y: row[COL_MAP[axis]] })),
+                        data: trial.data.map(row => ({ x: row[COL_MAP.Time] + offset, y: row[COL_MAP[axis]] })),
                         backgroundColor: color, borderColor: color,
                         pointRadius: parseFloat(pointSizeSlider.value),
                         showLine: showLineCheckbox.checked, tension: 0.1
                     });
                 });
             });
-            myChart.update('none');
+            
+            if(!draggedTrialId) myChart.update('none');
+            else myChart.update('resize');
         }
 
         function updateChartStyle() {
@@ -482,21 +548,16 @@
         
         function fitPolynomialToRange() {
             if (recordedData.length === 0) return;
-            
             const startTimeVal = myChart.scales.x.min;
             const endTimeVal = myChart.scales.x.max;
+            if (startTimeVal === undefined || endTimeVal === undefined) return alert("먼저 그래프에서 피팅할 영역을 드래그하여 선택해주세요.");
             
-            if (startTimeVal === undefined || endTimeVal === undefined) {
-                return alert("먼저 그래프에서 피팅할 영역을 드래그하여 선택해주세요.");
-            }
-
             const targetAxis = fitTargetSelect.value;
             const order = parseInt(polynomialOrderSelect.value);
 
             const dataToFit = recordedData
                 .filter(row => row[COL_MAP.Time] >= startTimeVal && row[COL_MAP.Time] <= endTimeVal)
                 .map(row => [row[COL_MAP.Time], row[COL_MAP[targetAxis]]]);
-
             if (dataToFit.length < order + 1) return alert("피팅에 필요한 데이터 포인트가 부족합니다.");
 
             const result = regression.polynomial(dataToFit, { order: order, precision: 5 });
