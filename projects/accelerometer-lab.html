@@ -149,7 +149,7 @@
         const pointSizeSlider = document.getElementById('pointSizeSlider');
         const pointSizeValue = document.getElementById('pointSizeValue');
         const showLineCheckbox = document.getElementById('showLineCheckbox');
-        const trialList = document.getElementById('trial-list');
+        const  = document.getElementById('trial-list');
         const saveTrialButton = document.getElementById('saveTrialButton');
         const clearTrialsButton = document.getElementById('clearTrialsButton');
         const cropButton = document.getElementById('cropButton');
@@ -207,7 +207,7 @@
         saveTrialButton.addEventListener('click', saveCurrentTrial);
         clearTrialsButton.addEventListener('click', clearAllTrials);
         cropButton.addEventListener('click', cropDataToRange);
-        trialList.addEventListener('click', handleTrialListClick);
+        .addEventListener('click', handleClick);
 
         // 차트 캔버스에 마우스 이벤트 리스너 추가 (드래그 기능)
         chartCanvas.addEventListener('mousedown', handleDragStart);
@@ -369,7 +369,7 @@ Read (4,096 bytes)
         function handleDragEnd(e) {
             if (draggedTrialId) {
                 localStorage.setItem('accelerometer_trials', JSON.stringify(savedTrials));
-                renderTrialList();
+                render();
                 draggedTrialId = null;
 
                 myChart.options.plugins.zoom.pan.enabled = true;
@@ -387,20 +387,20 @@ Read (4,096 bytes)
                 const trialData = { name: trialName, id: trialId, data: JSON.parse(JSON.stringify(recordedData)), timeOffset: 0 };
                 savedTrials[trialId] = trialData;
                 localStorage.setItem('accelerometer_trials', JSON.stringify(savedTrials));
-                renderTrialList();
+                render();
             }
         }
 
         function loadTrials() {
             const trials = localStorage.getItem('accelerometer_trials');
             if (trials) savedTrials = JSON.parse(trials);
-            renderTrialList();
+            render();
         }
 
-        function renderTrialList() {
-            trialList.innerHTML = '';
+        function render() {
+            .innerHTML = '';
             const currentTrialItem = document.createElement('li');
-            currentTrialItem.innerHTML = `<input type="checkbox" id="currentTrialCheckbox" checked> <label for="currentTrialCheckbox"><b>현재 측정 (${recordedData.length})</b></label>`; //             trialList.appendChild(currentTrialItem);
+            currentTrialItem.innerHTML = `<input type="checkbox" id="currentTrialCheckbox" checked> <label for="currentTrialCheckbox"><b>현재 측정 (${recordedData.length})</b></label>`; //             .appendChild(currentTrialItem);
 
             Object.values(savedTrials).forEach(trial => {
                 const li = document.createElement('li');
@@ -415,7 +415,7 @@ Read (4,096 bytes)
                         <button class="delete-trial-btn" data-id="${trial.id}">삭제</button>
                     </div>
                 `;
-      g             trialList.appendChild(li);
+                   trialList.appendChild(li);
             });
             
             trialList.querySelector('#currentTrialCheckbox').addEventListener('change', updateChartWithSelectedTrials);
@@ -602,3 +602,4 @@ Read (4,096 bytes)
     </script>
 </body>
 </html>
+
