@@ -96,7 +96,7 @@
                     <div class="chart-container"><canvas id="myChart"></canvas></div>
                 </div>
                 <div class="graph-controls">
-                   <span>Y축 선택:</span>
+          _         <span>Y축 선택:</span>
                     <div id="yAxisCheckboxGroup" class="checkbox-group">
                         <label><input type="checkbox" name="yAxis" value="X" checked> X</label>
                         <label><input type="checkbox" name="yAxis" value="Y" checked> Y</label>
@@ -109,7 +109,7 @@
                         <label><input type="checkbox" id="showLineCheckbox"> 선 연결</label>
                     </div>
                     <button id="resetZoomButton">줌 리셋</button>
-               </div>
+              _ </div>
                  <div class="graph-controls fit-controls">
                     <span><b>* 분석/편집할 영역을 그래프에서 드래그하세요.</b></span>
                     <button id="cropButton" disabled style="margin-left: auto;">선택 영역만 남기기</button>
@@ -149,7 +149,7 @@
         const pointSizeSlider = document.getElementById('pointSizeSlider');
         const pointSizeValue = document.getElementById('pointSizeValue');
         const showLineCheckbox = document.getElementById('showLineCheckbox');
-        const  = document.getElementById('trial-list');
+        const trialList = document.getElementById('trial-list');
         const saveTrialButton = document.getElementById('saveTrialButton');
         const clearTrialsButton = document.getElementById('clearTrialsButton');
         const cropButton = document.getElementById('cropButton');
@@ -207,7 +207,7 @@
         saveTrialButton.addEventListener('click', saveCurrentTrial);
         clearTrialsButton.addEventListener('click', clearAllTrials);
         cropButton.addEventListener('click', cropDataToRange);
-        .addEventListener('click', handleClick);
+        trialList.addEventListener('click', handleTrialListClick);
 
         // 차트 캔버스에 마우스 이벤트 리스너 추가 (드래그 기능)
         chartCanvas.addEventListener('mousedown', handleDragStart);
@@ -369,7 +369,7 @@ Read (4,096 bytes)
         function handleDragEnd(e) {
             if (draggedTrialId) {
                 localStorage.setItem('accelerometer_trials', JSON.stringify(savedTrials));
-                render();
+                renderTrialList();
                 draggedTrialId = null;
 
                 myChart.options.plugins.zoom.pan.enabled = true;
@@ -387,20 +387,20 @@ Read (4,096 bytes)
                 const trialData = { name: trialName, id: trialId, data: JSON.parse(JSON.stringify(recordedData)), timeOffset: 0 };
                 savedTrials[trialId] = trialData;
                 localStorage.setItem('accelerometer_trials', JSON.stringify(savedTrials));
-                render();
+                renderTrialList();
             }
         }
 
         function loadTrials() {
             const trials = localStorage.getItem('accelerometer_trials');
             if (trials) savedTrials = JSON.parse(trials);
-            render();
+            renderTrialList();
         }
 
-        function render() {
-            .innerHTML = '';
+        function renderTrialList() {
+            trialList.innerHTML = '';
             const currentTrialItem = document.createElement('li');
-            currentTrialItem.innerHTML = `<input type="checkbox" id="currentTrialCheckbox" checked> <label for="currentTrialCheckbox"><b>현재 측정 (${recordedData.length})</b></label>`; //             .appendChild(currentTrialItem);
+            currentTrialItem.innerHTML = `<input type="checkbox" id="currentTrialCheckbox" checked> <label for="currentTrialCheckbox"><b>현재 측정 (${recordedData.length})</b></label>`; //             trialList.appendChild(currentTrialItem);
 
             Object.values(savedTrials).forEach(trial => {
                 const li = document.createElement('li');
@@ -415,7 +415,7 @@ Read (4,096 bytes)
                         <button class="delete-trial-btn" data-id="${trial.id}">삭제</button>
                     </div>
                 `;
-                   trialList.appendChild(li);
+      g             trialList.appendChild(li);
             });
             
             trialList.querySelector('#currentTrialCheckbox').addEventListener('change', updateChartWithSelectedTrials);
@@ -602,5 +602,3 @@ Read (4,096 bytes)
     </script>
 </body>
 </html>
-
-
