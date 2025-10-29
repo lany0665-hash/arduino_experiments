@@ -27,82 +27,27 @@
         .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .log-header h2 { margin: 0; }
 
-        /* --- ★★★★★ 버튼 스타일 재정의 ★★★★★ --- */
-        /* 기본 버튼 스타일 */
-        button, .button-link { /* 링크도 버튼처럼 보이게 */
-            padding: 8px 12px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            background-color: #f0f0f0;
-            color: #333; /* 기본 글자색 */
-            cursor: pointer;
-            transition: background-color 0.2s, border-color 0.2s, color 0.2s;
-            text-decoration: none; /* 링크 밑줄 제거 */
-            font-size: 0.9em; /* 다른 버튼들과 크기 맞춤 */
-            display: inline-block; /* 링크를 버튼처럼 배치 */
-            text-align: center;
+        /* --- ★★★★★ 버튼 스타일 재정의 (기존과 동일) ★★★★★ --- */
+        button, .button-link {
+            padding: 8px 12px; border: 1px solid #ccc; border-radius: 5px; background-color: #f0f0f0;
+            color: #333; cursor: pointer; transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+            text-decoration: none; font-size: 0.9em; display: inline-block; text-align: center;
         }
-        button:disabled, .button-link:disabled { /* disabled 상태 공통 */
-             background-color: #e9ecef;
-             border-color: #ced4da;
-             color: #adb5bd;
-             cursor: not-allowed;
-             opacity: 0.65;
+        button:disabled, .button-link:disabled {
+            background-color: #e9ecef; border-color: #ced4da; color: #adb5bd;
+            cursor: not-allowed; opacity: 0.65;
         }
-        button:not(:disabled):hover, .button-link:not(:disabled):hover { /* 호버 효과 공통 */
-             background-color: #ddd;
-             border-color: #bbb;
-             color: #111;
+        button:not(:disabled):hover, .button-link:not(:disabled):hover {
+            background-color: #ddd; border-color: #bbb; color: #111;
         }
-
-        /* 주요 액션 버튼 (파랑) */
-        .btn-primary {
-            background-color: #007bff;
-            border-color: #007bff;
-            color: white;
-        }
-        .btn-primary:not(:disabled):hover {
-            background-color: #0056b3;
-            border-color: #0056b3;
-            color: white;
-        }
-
-        /* 위험 액션 버튼 (빨강) */
-        .btn-danger {
-            background-color: #dc3545;
-            border-color: #dc3545;
-            color: white;
-        }
-        .btn-danger:not(:disabled):hover {
-            background-color: #c82333;
-            border-color: #bd2130;
-            color: white;
-        }
-
-        /* 보조 액션 버튼 (회색) */
-        .btn-secondary {
-            background-color: #6c757d;
-            border-color: #6c757d;
-            color: white;
-        }
-        .btn-secondary:not(:disabled):hover {
-            background-color: #5a6268;
-            border-color: #545b62;
-            color: white;
-        }
-        
-        /* 정보/링크 버튼 (청록) */
-        .btn-info {
-            background-color: #17a2b8;
-            border-color: #17a2b8;
-            color: white;
-        }
-        .btn-info:not(:disabled):hover {
-             background-color: #138496;
-             border-color: #117a8b;
-             color: white;
-        }
-        /* --- ★★★★★ 버튼 스타일 끝 ★★★★★ --- */
+        .btn-primary { background-color: #007bff; border-color: #007bff; color: white; }
+        .btn-primary:not(:disabled):hover { background-color: #0056b3; border-color: #0056b3; color: white; }
+        .btn-danger { background-color: #dc3545; border-color: #dc3545; color: white; }
+        .btn-danger:not(:disabled):hover { background-color: #c82333; border-color: #bd2130; color: white; }
+        .btn-secondary { background-color: #6c757d; border-color: #6c757d; color: white; }
+        .btn-secondary:not(:disabled):hover { background-color: #5a6268; border-color: #545b62; color: white; }
+        .btn-info { background-color: #17a2b8; border-color: #17a2b8; color: white; }
+        .btn-info:not(:disabled):hover { background-color: #138496; border-color: #117a8b; color: white; }
     </style>
 </head>
 <body>
@@ -122,14 +67,14 @@
         <div class="table-header">
               <h2>실시간 현황</h2>
               <div class="table-controls">
-                  <button id="recordButton" disabled>측정 시작</button>
-                  <span>샘플링 속도:</span>
-                  <select id="samplingRateSelect">
-                      <option value="1000" selected>1s</option>
-                      <option value="2000">2s</option>
-                      <option value="5000">5s</option>
-                  </select>
-                  <button id="downloadButton" class="btn-secondary" disabled>엑셀 저장</button>
+                    <button id="recordButton" disabled>측정 시작</button>
+                    <span>샘플링 속도:</span>
+                    <select id="samplingRateSelect">
+                        <option value="1000" selected>1s</option>
+                        <option value="2000">2s</option>
+                        <option value="5000">5s</option>
+                    </select>
+                    <button id="downloadButton" class="btn-secondary" disabled>엑셀 저장</button>
               </div>
         </div>
         
@@ -137,7 +82,7 @@
             <div class="sensor-readout"><h3>🌡️ 온도</h3><p><span id="temp-value" class="value">--</span> °C</p></div>
             <div class="sensor-readout"><h3>💧 습도</h3><p><span id="humidity-value" class="value">--</span> %</p></div>
             <div class="sensor-readout"><h3>💨 압력</h3><p><span id="pressure-value" class="value">--</span> kPa</p></div>
-            <div class="sensor-readout"><h3>☀️ 조도</h3><p><span id="light-value" class="value">--</span></p></div>
+            <div class="sensor-readout"><h3>🌫️ 증기압</h3><p><span id="vapor-pressure-value" class="value">--</span> kPa</p></div>
         </div>
 
         <div class="main-layout">
@@ -151,7 +96,7 @@
                 </div>
                 <div class="table-container" id="tableContainer">
                     <table id="historyTable">
-                        <thead><tr><th>Time (s)</th><th>온도</th><th>습도</th><th>압력</th><th>조도</th></tr></thead>
+                        <thead><tr><th>Time (s)</th><th>온도</th><th>습도</th><th>압력</th><th>증기압</th></tr></thead>
                         <tbody id="historyTbody"></tbody>
                     </table>
                 </div>
@@ -169,7 +114,8 @@
                  <div class="graph-controls">
                     <span>X축:</span>
                     <select id="xAxisSelect">
-                        <option value="time" selected>시간</option><option value="temp">온도</option><option value="humidity">습도</option><option value="pressure">압력</option><option value="light">조도</option>
+                        <option value="time" selected>시간</option><option value="temp">온도</option><option value="humidity">습도</option><option value="pressure">압력</option>
+                        <option value="vaporPressure">증기압</option>
                     </select>
                     
                     <span>Y축 (중복):</span>
@@ -177,7 +123,7 @@
                         <label><input type="checkbox" class="y-axis-cb" value="temp" checked> 온도</label>
                         <label><input type="checkbox" class="y-axis-cb" value="humidity"> 습도</label>
                         <label><input type="checkbox" class="y-axis-cb" value="pressure"> 압력</label>
-                        <label><input type="checkbox" class="y-axis-cb" value="light"> 조도</label>
+                        <label><input type="checkbox" class="y-axis-cb" value="vaporPressure"> 증기압</label>
                     </div>
                  </div>
                 <div class="chart-container" style="height: 455px;"><canvas id="myChart"></canvas></div>
@@ -199,7 +145,8 @@
         const tempValue = document.getElementById('temp-value');
         const humidityValue = document.getElementById('humidity-value');
         const pressureValue = document.getElementById('pressure-value');
-        const lightValue = document.getElementById('light-value');
+        // ★★★ 변경됨 ★★★ (조도 -> 증기압)
+        const vaporPressureValue = document.getElementById('vapor-pressure-value');
         const historyTbody = document.getElementById('historyTbody');
         const chartCanvas = document.getElementById('myChart');
         const samplingRateSelect = document.getElementById('samplingRateSelect');
@@ -226,8 +173,18 @@
         const UART_TX_CHAR_UUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
         const UART_CMD_CHAR_UUID = "19b10002-e8f2-537e-4f6c-d104768a1214";
 
-        const SENSOR_UNITS = { time: '시간 (s)', temp: '온도 (°C)', humidity: '습도 (%)', pressure: '압력 (kPa)', light: '조도' };
+        // ★★★ 변경됨 ★★★ (조도 -> 증기압)
+        const SENSOR_UNITS = { time: '시간 (s)', temp: '온도 (°C)', humidity: '습도 (%)', pressure: '압력 (kPa)', vaporPressure: '증기압 (kPa)' };
         const TRIAL_COLORS = ['rgba(255, 99, 132, 0.8)', 'rgba(54, 162, 235, 0.8)', 'rgba(75, 192, 192, 0.8)', 'rgba(153, 102, 255, 0.8)', 'rgba(255, 159, 64, 0.8)', 'rgba(201, 203, 207, 0.8)'];
+
+        // ★★★ 추가됨 ★★★ (증기압 계산 함수)
+        function calculateVaporPressure(temp, humidity) {
+            // Magnus-Tetens formula (kPa)
+            const saturationPressure = 0.61094 * Math.exp((17.625 * temp) / (temp + 243.04));
+            // Actual Vapor Pressure
+            const actualVaporPressure = saturationPressure * (humidity / 100.0);
+            return actualVaporPressure;
+        }
 
         myChart = new Chart(chartCanvas, {
             type: 'scatter',
@@ -241,20 +198,8 @@
                 },
                 plugins: { 
                     zoom: {
-                        pan: {
-                            enabled: true,
-                            mode: 'x',
-                            modifierKey: 'shift', 
-                        },
-                        zoom: {
-                            drag: {
-                                enabled: true, 
-                            },
-                            wheel: {
-                                enabled: true, 
-                            },
-                            mode: 'x', 
-                        }
+                        pan: { enabled: true, mode: 'x', modifierKey: 'shift', },
+                        zoom: { drag: { enabled: true, }, wheel: { enabled: true, }, mode: 'x', }
                     }
                 }
             } 
@@ -362,17 +307,25 @@
                 const json = JSON.parse(value);
                 if (json.type === 'env') {
                     const data = json.data;
+                    
+                    // ★★★ 변경됨 ★★★ (증기압 계산 및 표시)
+                    const vaporPressure = calculateVaporPressure(data.temp, data.humidity);
+
                     tempValue.textContent = data.temp.toFixed(2);
                     humidityValue.textContent = data.humidity.toFixed(2);
                     pressureValue.textContent = data.pressure.toFixed(2);
-                    lightValue.textContent = data.light;
+                    vaporPressureValue.textContent = vaporPressure.toFixed(3); // 3자리로 표시
                     
                     if (isRecording) {
+                        // ★★★ 변경됨 ★★★ (newDataPoint 객체 수정)
                         const newDataPoint = {
                             id: Date.now(),
                             time: recordedData.length * (envIntervalMs / 1000.0),
                             timestamp: json.ts,
-                            ...data
+                            temp: data.temp,
+                            humidity: data.humidity,
+                            pressure: data.pressure,
+                            vaporPressure: vaporPressure // light 대신 vaporPressure 저장
                         };
                         recordedData.push(newDataPoint);
                         
@@ -428,7 +381,6 @@
 
             Object.values(savedTrials).forEach(trial => {
                 const li = document.createElement('li');
-                // ★★★★★ 삭제 버튼 클래스 추가 ★★★★★
                 li.innerHTML = `<input type="checkbox" id="${trial.id}" class="trial-checkbox"> <label for="${trial.id}">${trial.name} (${trial.data.length}개)</label> <button class="delete-trial-btn btn-danger" data-id="${trial.id}" style="margin-left: auto;">삭제</button>`;
                 trialList.appendChild(li);
             });
@@ -437,7 +389,6 @@
             trialList.querySelectorAll('.trial-checkbox').forEach(cb => cb.addEventListener('change', redrawChart));
             trialList.querySelectorAll('.delete-trial-btn').forEach(btn => btn.addEventListener('click', (e) => {
                 const id = e.target.dataset.id;
-                // Ensure savedTrials[id] exists before trying to access its name
                 if (savedTrials[id] && confirm(`'${savedTrials[id].name}' 회차를 삭제하시겠습니까?`)) {
                     delete savedTrials[id];
                     localStorage.setItem('env_sensor_trials', JSON.stringify(savedTrials));
@@ -533,6 +484,7 @@
                     const color = TRIAL_COLORS[colorIndex % TRIAL_COLORS.length];
                     myChart.data.datasets.push({
                         label: `${trial.name} - ${SENSOR_UNITS[yKey].split(' ')[0]}`,
+                        // ★★★ 변경됨 ★★★ (hasProperty'light' -> 'vaporPressure' 자동 처리)
                         data: trial.data.filter(d => d && d.hasOwnProperty(xKey) && d.hasOwnProperty(yKey)).map(d => ({ x: d[xKey], y: d[yKey] })),
                         borderColor: color, 
                         backgroundColor: color.replace('0.8)', '0.5)'),
@@ -544,9 +496,10 @@
             myChart.update();
         }
 
+        // ★★★ 변경됨 ★★★ (addTableRow 함수 수정)
         function addTableRow(row, data) {
-             if (data && data.time !== undefined && data.temp !== undefined && data.humidity !== undefined && data.pressure !== undefined && data.light !== undefined) {
-                 row.innerHTML = `<td>${data.time.toFixed(2)}</td><td>${data.temp.toFixed(2)}</td><td>${data.humidity.toFixed(2)}</td><td>${data.pressure.toFixed(2)}</td><td>${data.light}</td>`;
+             if (data && data.time !== undefined && data.temp !== undefined && data.humidity !== undefined && data.pressure !== undefined && data.vaporPressure !== undefined) {
+                 row.innerHTML = `<td>${data.time.toFixed(2)}</td><td>${data.temp.toFixed(2)}</td><td>${data.humidity.toFixed(2)}</td><td>${data.pressure.toFixed(2)}</td><td>${data.vaporPressure.toFixed(3)}</td>`;
              } else {
                  console.error("Invalid data passed to addTableRow:", data);
              }
@@ -564,12 +517,13 @@
             tableContainer.scrollTop = tableContainer.scrollHeight;
         }
         
+        // ★★★ 변경됨 ★★★ (downloadData 함수 수정)
         function downloadData() {
             if (!Array.isArray(recordedData) || recordedData.length === 0) return alert("다운로드할 데이터가 없습니다.");
-            let csvContent = "data:text/csv;charset=utf-8,ID,Time (s),Temperature,Humidity,Pressure,Light,Timestamp (ms)\n";
+            let csvContent = "data:text/csv;charset=utf-8,ID,Time (s),Temperature,Humidity,Pressure,VaporPressure (kPa),Timestamp (ms)\n";
             recordedData.forEach(d => {
-                 if (d && d.id !== undefined && d.time !== undefined && d.temp !== undefined && d.humidity !== undefined && d.pressure !== undefined && d.light !== undefined && d.timestamp !== undefined) {
-                    csvContent += `${d.id},${d.time.toFixed(3)},${d.temp.toFixed(2)},${d.humidity.toFixed(2)},${d.pressure.toFixed(2)},${d.light},${d.timestamp}\n`;
+                 if (d && d.id !== undefined && d.time !== undefined && d.temp !== undefined && d.humidity !== undefined && d.pressure !== undefined && d.vaporPressure !== undefined && d.timestamp !== undefined) {
+                     csvContent += `${d.id},${d.time.toFixed(3)},${d.temp.toFixed(2)},${d.humidity.toFixed(2)},${d.pressure.toFixed(2)},${d.vaporPressure.toFixed(3)},${d.timestamp}\n`;
                  } else {
                      console.warn("Skipping invalid data row during CSV export:", d);
                  }
@@ -582,16 +536,17 @@
             document.body.removeChild(link);
         }
 
+        // ★★★ 변경됨 ★★★ (copyDataAndOpenLink 함수 수정)
         async function copyDataAndOpenLink() {
             if (!Array.isArray(recordedData) || recordedData.length === 0) {
                 alert("복사할 데이터가 없습니다. 먼저 측정을 완료해주세요.");
                 return;
             }
 
-            let dataString = "Time (s)\tTemperature\tHumidity\tPressure\tLight\n"; 
+            let dataString = "Time (s)\tTemperature\tHumidity\tPressure\tVaporPressure\n"; 
             recordedData.forEach(d => {
-                 if (d && d.time !== undefined && d.temp !== undefined && d.humidity !== undefined && d.pressure !== undefined && d.light !== undefined) {
-                     dataString += `${d.time.toFixed(3)}\t${d.temp.toFixed(2)}\t${d.humidity.toFixed(2)}\t${d.pressure.toFixed(2)}\t${d.light}\n`;
+                 if (d && d.time !== undefined && d.temp !== undefined && d.humidity !== undefined && d.pressure !== undefined && d.vaporPressure !== undefined) {
+                      dataString += `${d.time.toFixed(3)}\t${d.temp.toFixed(2)}\t${d.humidity.toFixed(2)}\t${d.pressure.toFixed(2)}\t${d.vaporPressure.toFixed(3)}\n`;
                  }
             });
 
