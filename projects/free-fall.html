@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>자유낙하 다중섬광사진 및 궤적 분석</title>
-    <!-- 그래프 작성을 위한 Chart.js 로드 -->
+    <title>자유낙하 다중섬광사진 및 자동 궤적 분석</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
@@ -22,8 +21,8 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         h1 { color: #333; }
-        .controls {
-            margin: 20px 0;
+        .controls, .slider-controls {
+            margin: 15px 0;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -40,17 +39,20 @@
             border-radius: 5px;
             cursor: pointer;
         }
-        .fps-control {
+        .control-group {
             display: flex;
             align-items: center;
             gap: 5px;
             font-weight: bold;
         }
-        .fps-control input {
+        .control-group input[type="number"] {
             width: 60px;
             padding: 5px;
             font-size: 16px;
             text-align: center;
+        }
+        .control-group input[type="range"] {
+            cursor: pointer;
         }
         button {
             padding: 10px 20px;
@@ -66,7 +68,9 @@
         button:hover { background-color: #0056b3; }
         button:disabled { background-color: #cccccc; cursor: not-allowed; }
         
-        #btn-strobo { background-color: #6f42c1; }
+        #btn-auto-track { background-color: #dc3545; display: none; }
+        #btn-auto-track:hover { background-color: #c82333; }
+        #btn-strobo { background-color: #6f42c1; display: none; }
         #btn-strobo:hover { background-color: #5a32a3; }
         
         #video-container, #strobo-container {
@@ -77,7 +81,6 @@
         canvas {
             border: 2px solid #333;
             border-radius: 4px;
-            cursor: crosshair;
             background-color: #fff;
             max-width: 100%;
             height: auto;
@@ -107,27 +110,44 @@
             border-top: 2px dashed #ccc;
             padding-top: 20px;
         }
+        .notice {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>자유낙하 궤적 분석 & 다중섬광사진</h1>
-        <p>스마트폰 영상을 업로드하여 물체의 궤적을 분석하고 다중섬광사진을 합성해 보세요.</p>
+        <h1>자유낙하 궤적 분석 & 다중섬광사진 (자동 인식)</h1>
+        <p>물체의 중심을 자동으로 추적하고 원하는 간격으로 다중섬광사진을 합성합니다.</p>
         
         <div class="controls">
-            <!-- 사진이 선택되지 않도록 video/* 로 다시 제한 -->
             <input type="file" id="video-upload" accept="video/*">
-            <div class="fps-control">
+            <div class="control-group">
                 <label for="fps-input">영상 FPS:</label>
                 <input type="number" id="fps-input" value="30" min="1" max="240">
             </div>
-            <button id="btn-extract">영상 분석 준비</button>
+            <button id="btn-extract">영상 로드 및 추출</button>
             <button id="btn-reset">🔄 초기화</button>
-            <button id="btn-csv" style="display:none; background-color: #28a745;">📊 CSV 다운로드</button>
-            <button id="btn-strobo" style="display:none;">📸 다중섬광사진 합성</button>
         </div>
 
-        <div id="status-msg">1단계: 동영상 파일을 선택하고 '영상 분석 준비'를 누르세요.</div>
+        <div class="slider-controls" id="track-controls" style="display:none;">
+            <div class="control-group">
+                <label for="threshold-slider">인식 민감도:</label>
+                <input type="range" id="threshold-slider" min="10" max="150" value="40">
+            </div>
+            <div class="control-group">
+                <label for="step-slider">다중섬광 프레임 간격:</label>
+                <input type="range" id="step-slider" min="1" max="15" value="2">
+                <span id="step-val">2</span>
+            </div>
+            <button id="btn-auto-track">자동 추적 및 합성 실행</button>
+            <button id="btn-csv" style="display:none; background-color: #28a745;">📊 CSV 다운로드</button>
+        </div>
+
+        <div id="status-msg">1단계: 동영상 파일을 선택하고 '영상 로드 및 추출'을 누르세요.</div>
+        <div class="notice">※ 정확한 자동 인식을 위해 카메라가 완벽히 고정된 영상이어야 합니다.</div>
         <div id="loading-overlay">영상을 추출하고 있습니다... <span id="progress-text"></span></div>
 
         <div id="video-container">
@@ -137,7 +157,6 @@
 
         <div id="strobo-container" style="display:none; width:100%;">
             <h2 class="section-title">합성된 다중섬광사진</h2>
-            <p>※ 배경이 밝고 카메라가 고정되어 있을수록 결과물이 깨끗합니다.</p>
             <canvas id="canvas-strobo"></canvas><br>
             <button id="btn-download-strobo" style="margin-top: 10px; background-color: #17a2b8;">🖼️ 사진 다운로드</button>
         </div>
@@ -151,28 +170,32 @@
     <script>
         const fileInput = document.getElementById('video-upload');
         const fpsInput = document.getElementById('fps-input');
+        const thresholdSlider = document.getElementById('threshold-slider');
+        const stepSlider = document.getElementById('step-slider');
+        const stepVal = document.getElementById('step-val');
+        
         const btnExtract = document.getElementById('btn-extract');
+        const btnAutoTrack = document.getElementById('btn-auto-track');
         const btnReset = document.getElementById('btn-reset');
         const btnCsv = document.getElementById('btn-csv');
-        const btnStrobo = document.getElementById('btn-strobo');
         const btnDownloadStrobo = document.getElementById('btn-download-strobo');
+        
         const statusMsg = document.getElementById('status-msg');
         const loadingOverlay = document.getElementById('loading-overlay');
         const progressText = document.getElementById('progress-text');
+        const trackControls = document.getElementById('track-controls');
+        const stroboContainer = document.getElementById('strobo-container');
         
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         
         const canvasStrobo = document.getElementById('canvas-strobo');
-        const ctxStrobo = canvasStrobo.getContext('2d');
-        const stroboContainer = document.getElementById('strobo-container');
-        
+        const ctxStrobo = canvasStrobo.getContext('2d', { willReadFrequently: true });
         const chartWrapper = document.getElementById('chart-wrapper');
         
         let frames = [];
         let dataPoints = [];
-        let analyzeIndex = -1;
         let chartInstance = null;
         let fps = 30;
         let frameInterval = 1 / fps;
@@ -181,18 +204,22 @@
         const MAX_DIMENSION = 800; 
         const MAX_FRAMES = 150; 
 
+        // 슬라이더 텍스트 실시간 업데이트
+        stepSlider.addEventListener('input', (e) => {
+            stepVal.innerText = e.target.value;
+        });
+
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
             const fileURL = URL.createObjectURL(file);
             video.src = fileURL;
-            statusMsg.innerText = "영상이 로드되었습니다. '영상 분석 준비' 버튼을 누르세요.";
+            statusMsg.innerText = "영상이 로드되었습니다. '영상 로드 및 추출' 버튼을 누르세요.";
         });
 
         video.addEventListener('error', () => {
-            alert("브라우저에서 지원하지 않는 영상 포맷이거나 파일이 손상되었습니다. 다른 영상을 선택해 주세요.");
+            alert("브라우저에서 지원하지 않는 영상 포맷입니다.");
             btnExtract.disabled = false;
-            statusMsg.innerText = "에러: 영상을 읽을 수 없습니다.";
         });
 
         btnExtract.addEventListener('click', () => {
@@ -200,7 +227,8 @@
 
             fps = parseInt(fpsInput.value) || 30;
             frameInterval = 1 / fps;
-            frames = []; dataPoints = []; analyzeIndex = -1; extractionTime = 0;
+            frames = []; 
+            extractionTime = 0;
 
             btnExtract.disabled = true; fileInput.disabled = true; fpsInput.disabled = true;
             loadingOverlay.style.display = 'block';
@@ -237,111 +265,127 @@
         function finishExtraction() {
             loadingOverlay.style.display = 'none';
             if (frames.length > 0) {
-                analyzeIndex = 0;
-                statusMsg.innerText = `3단계: 총 ${frames.length}프레임. 물체를 클릭하여 궤적을 그리거나 '다중섬광사진 합성'을 누르세요.`;
-                renderAnalyzeFrame();
-                btnStrobo.style.display = 'inline-block'; 
+                // 첫 번째 프레임을 화면에 표시
+                ctx.putImageData(frames[0].img, 0, 0);
+                trackControls.style.display = 'flex';
+                btnAutoTrack.style.display = 'inline-block';
+                statusMsg.innerText = `3단계: 설정 조절 후 '자동 추적 및 합성 실행'을 누르세요.`;
             } else {
                 statusMsg.innerText = "프레임 추출 실패. 영상 포맷을 확인해주세요.";
                 btnExtract.disabled = false;
             }
         }
 
-        function renderAnalyzeFrame() {
-            ctx.putImageData(frames[analyzeIndex].img, 0, 0);
-            ctx.fillStyle = 'red';
-            for (let i = 0; i < dataPoints.length; i++) {
-                ctx.beginPath(); ctx.arc(dataPoints[i].x, dataPoints[i].y, 5, 0, 2 * Math.PI); ctx.fill();
-                if (i > 0) {
-                    ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; ctx.lineWidth = 2;
-                    ctx.beginPath(); ctx.moveTo(dataPoints[i-1].x, dataPoints[i-1].y); ctx.lineTo(dataPoints[i].x, dataPoints[i].y); ctx.stroke();
-                }
-            }
-        }
-
-        canvas.addEventListener('click', (e) => {
-            if (analyzeIndex >= 0 && analyzeIndex < frames.length) {
-                const rect = canvas.getBoundingClientRect();
-                const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
-                const clickX = (e.clientX - rect.left) * scaleX; const clickY = (e.clientY - rect.top) * scaleY;
-
-                dataPoints.push({ time: frames[analyzeIndex].time, x: clickX, y: clickY });
-                analyzeIndex++;
+        // --- 자동 추적 및 합성 핵심 로직 ---
+        btnAutoTrack.addEventListener('click', () => {
+            dataPoints = [];
+            const threshold = parseInt(thresholdSlider.value);
+            const step = parseInt(stepSlider.value);
+            
+            // 첫 번째 프레임을 배경(기준)으로 설정
+            const baseData = frames[0].img.data; 
+            
+            // 1. 프레임별 물체 위치(중심점) 자동 계산
+            for (let i = 1; i < frames.length; i++) {
+                const currentData = frames[i].img.data;
+                let sumX = 0, sumY = 0, count = 0;
                 
-                if (analyzeIndex < frames.length) {
-                    statusMsg.innerText = `분석 중 (${analyzeIndex + 1} / ${frames.length} 프레임)`;
-                    renderAnalyzeFrame();
-                } else {
-                    statusMsg.innerText = "분석 완료!";
-                    renderAnalyzeFrame(); 
-                    drawGraph();
-                    btnCsv.style.display = 'inline-block';
+                for (let j = 0; j < currentData.length; j += 4) {
+                    const rDiff = Math.abs(currentData[j] - baseData[j]);
+                    const gDiff = Math.abs(currentData[j+1] - baseData[j+1]);
+                    const bDiff = Math.abs(currentData[j+2] - baseData[j+2]);
+                    
+                    // RGB 차이의 평균값이 임계값 이상인 픽셀(움직인 물체) 수집
+                    const diff = (rDiff + gDiff + bDiff) / 3;
+                    
+                    if (diff > threshold) { 
+                        const pixelIndex = j / 4;
+                        const x = pixelIndex % canvas.width;
+                        const y = Math.floor(pixelIndex / canvas.width);
+                        sumX += x;
+                        sumY += y;
+                        count++;
+                    }
+                }
+                
+                // 노이즈 방지를 위해 변화된 픽셀이 일정 개수 이상일 때만 중심 좌표 기록
+                if (count > 20) { 
+                    dataPoints.push({
+                        time: frames[i].time,
+                        x: sumX / count,
+                        y: sumY / count,
+                        frameIndex: i
+                    });
                 }
             }
-        });
-
-        // 다중섬광사진 합성 로직
-        btnStrobo.addEventListener('click', () => {
-            if (frames.length === 0) return;
+            
+            // 2. 다중섬광사진 합성 (선택된 프레임 간격(step) 적용)
             stroboContainer.style.display = 'block';
             
             const offCanvas = document.createElement('canvas');
             offCanvas.width = canvas.width; offCanvas.height = canvas.height;
             const offCtx = offCanvas.getContext('2d');
 
-            offCtx.putImageData(frames[0].img, 0, 0);
-            ctxStrobo.drawImage(offCanvas, 0, 0);
-            
+            // 첫 프레임(배경) 그리기
+            ctxStrobo.putImageData(frames[0].img, 0, 0);
             ctxStrobo.globalCompositeOperation = 'darken';
 
-            for (let i = 1; i < frames.length; i++) {
+            // 슬라이더 간격(step)에 맞춰 프레임 겹치기
+            for (let i = step; i < frames.length; i += step) {
                 offCtx.putImageData(frames[i].img, 0, 0);
                 ctxStrobo.drawImage(offCanvas, 0, 0);
             }
             
             ctxStrobo.globalCompositeOperation = 'source-over';
             
-            // 객체 중심점과 타임스탬프 표시
+            // 3. 추출된 프레임 간격에 맞춰 중심점 궤적 및 시간 표시
             if (dataPoints.length > 0) {
-                const startTime = dataPoints[0].time;
+                const startTime = frames[0].time;
+                let prevPoint = null;
 
-                for (let i = 0; i < dataPoints.length; i++) {
-                    // 점 그리기
-                    ctxStrobo.fillStyle = 'red';
-                    ctxStrobo.beginPath(); 
-                    ctxStrobo.arc(dataPoints[i].x, dataPoints[i].y, 5, 0, 2 * Math.PI); 
-                    ctxStrobo.fill();
-
-                    // 타임스탬프 텍스트 그리기 (가독성을 위한 그림자 효과 추가)
-                    const timeText = (dataPoints[i].time - startTime).toFixed(3) + "s";
-                    ctxStrobo.font = "bold 16px 'Segoe UI', Arial, sans-serif";
-                    ctxStrobo.fillStyle = "yellow";
-                    ctxStrobo.shadowColor = "black";
-                    ctxStrobo.shadowBlur = 4;
-                    ctxStrobo.shadowOffsetX = 1;
-                    ctxStrobo.shadowOffsetY = 1;
+                for (let i = step; i < frames.length; i += step) {
+                    // 현재 프레임 인덱스에 해당하는 데이터 포인트 찾기
+                    const dp = dataPoints.find(d => d.frameIndex === i);
                     
-                    // 점의 오른쪽 약간 아래에 텍스트 배치
-                    ctxStrobo.fillText(timeText, dataPoints[i].x + 12, dataPoints[i].y + 6);
-                    
-                    // 그림자 초기화 (선 그리기 위해)
-                    ctxStrobo.shadowColor = "transparent";
-                    ctxStrobo.shadowBlur = 0;
-                    ctxStrobo.shadowOffsetX = 0;
-                    ctxStrobo.shadowOffsetY = 0;
-
-                    // 궤적 선 그리기
-                    if (i > 0) {
-                        ctxStrobo.strokeStyle = 'rgba(255, 0, 0, 0.5)'; 
-                        ctxStrobo.lineWidth = 2;
+                    if (dp) {
+                        ctxStrobo.fillStyle = 'red';
                         ctxStrobo.beginPath(); 
-                        ctxStrobo.moveTo(dataPoints[i-1].x, dataPoints[i-1].y); 
-                        ctxStrobo.lineTo(dataPoints[i].x, dataPoints[i].y); 
-                        ctxStrobo.stroke();
+                        ctxStrobo.arc(dp.x, dp.y, 5, 0, 2 * Math.PI); 
+                        ctxStrobo.fill();
+
+                        // 타임스탬프 (가독성을 위한 그림자)
+                        const timeText = (dp.time - startTime).toFixed(3) + "s";
+                        ctxStrobo.font = "bold 16px 'Segoe UI', Arial, sans-serif";
+                        ctxStrobo.fillStyle = "yellow";
+                        ctxStrobo.shadowColor = "black";
+                        ctxStrobo.shadowBlur = 4;
+                        ctxStrobo.shadowOffsetX = 1;
+                        ctxStrobo.shadowOffsetY = 1;
+                        
+                        ctxStrobo.fillText(timeText, dp.x + 12, dp.y + 6);
+                        
+                        ctxStrobo.shadowColor = "transparent";
+                        ctxStrobo.shadowBlur = 0;
+                        ctxStrobo.shadowOffsetX = 0;
+                        ctxStrobo.shadowOffsetY = 0;
+
+                        // 선 긋기
+                        if (prevPoint) {
+                            ctxStrobo.strokeStyle = 'rgba(255, 0, 0, 0.5)'; 
+                            ctxStrobo.lineWidth = 2;
+                            ctxStrobo.beginPath(); 
+                            ctxStrobo.moveTo(prevPoint.x, prevPoint.y); 
+                            ctxStrobo.lineTo(dp.x, dp.y); 
+                            ctxStrobo.stroke();
+                        }
+                        prevPoint = dp;
                     }
                 }
             }
             
+            statusMsg.innerText = "분석 완료! 그래프와 합성된 사진을 확인하세요.";
+            drawGraph();
+            btnCsv.style.display = 'inline-block';
             stroboContainer.scrollIntoView({ behavior: 'smooth' });
         });
 
@@ -355,7 +399,10 @@
         function drawGraph() {
             chartWrapper.style.display = 'block';
             const ctxChart = document.getElementById('chart').getContext('2d');
-            const startTime = dataPoints[0].time;
+            
+            if (dataPoints.length === 0) return;
+            
+            const startTime = frames[0].time;
             const scatterData = dataPoints.map(dp => ({
                 x: (dp.time - startTime).toFixed(4), y: dp.y.toFixed(1)
             }));
@@ -365,7 +412,7 @@
                 type: 'scatter',
                 data: {
                     datasets: [{
-                        label: '시간(t)에 따른 Y좌표 (Pixel)', data: scatterData,
+                        label: '자동 인식된 Y좌표 (Pixel)', data: scatterData,
                         backgroundColor: 'red', borderColor: 'red', showLine: true, fill: false, tension: 0.3
                     }]
                 },
@@ -380,7 +427,8 @@
         }
 
         btnCsv.addEventListener('click', () => {
-            const startTime = dataPoints[0].time;
+            if (dataPoints.length === 0) return;
+            const startTime = frames[0].time;
             let csvContent = "data:text/csv;charset=utf-8,Time (s),X Position (px),Y Position (px)\n";
             dataPoints.forEach(row => { csvContent += `${(row.time - startTime).toFixed(4)},${row.x.toFixed(1)},${row.y.toFixed(1)}\n`; });
             const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "free_fall_analysis.csv");
