@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>자유낙하 궤적 분석 (동영상 업로드)</title>
+    <!-- 그래프 작성을 위한 Chart.js 로드 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            background-color: #f1f3f5;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        input[type="file"] {
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .fps-control {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: bold;
+        }
+        .fps-control input {
+            width: 60px;
+            padding: 5px;
+            font-size: 16px;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+            background-color: #007bff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        
+        #video-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        canvas {
+            border: 2px solid #333;
+            border-radius: 4px;
+            cursor: crosshair;
+            background-color: #000;
+            max-width: 100%;
+            height: auto;
+        }
+        /* 분석을 위해 실제 비디오 태그는 숨김 처리 */
+        video { display: none; }
+        
+        #status-msg {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #d35400;
+            margin-bottom: 15px;
+        }
+        .chart-container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            display: none;
+        }
+        #loading-overlay {
+            display: none;
+            color: #28a745;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>자유낙하 궤적 분석기</h1>
+        <p>스마트폰으로 짧게 촬영한 자유낙하 영상을 업로드하고, 프레임별 위치를 클릭하세요.</p>
+        
+        <div class="controls">
+            <input type="file" id="video-upload" accept="video/mp4,video/x-m4v,video/*,video/quicktime">
+            <div class="fps-control">
+                <label for="fps-input">영상 FPS (초당 프레임):</label>
+                <input type="number" id="fps-input" value="30" min="1" max="240">
+            </div>
+            <button id="btn-extract">영상 분석 준비</button>
+            <button id="btn-reset">🔄 초기화</button>
+            <button id="btn-csv" style="display:none; background-color: #28a745;">📊 CSV 다운로드</button>
+        </div>
+
+        <div id="status-msg">1단계: 동영상 파일을 선택하고, 촬영한 FPS를 입력하세요.</div>
+        <div id="loading-overlay">영상을 프레임 단위로 분해하고 있습니다. 잠시만 기다려주세요... <span id="progress-text"></span></div>
+
+        <div id="video-container">
+            <video id="video" playsinline preload="auto"></video>
+            <canvas id="canvas" width="640" height="480"></canvas>
+        </div>
+
+        <div class="chart-container" id="chart-wrapper">
+            <canvas id="chart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('video-upload');
+        const fpsInput = document.getElementById('fps-input');
+        const btnExtract = document.getElementById('btn-extract');
+        const btnReset = document.getElementById('btn-reset');
+        const btnCsv = document.getElementById('btn-csv');
+        const statusMsg = document.getElementById('status-msg');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const progressText = document.getElementById('progress-text');
+        
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const chartWrapper = document.getElementById('chart-wrapper');
+        
+        let frames = [];
+        let dataPoints = [];
+        let analyzeIndex = -1;
+        let chartInstance = null;
+        let fps = 30;
+        let frameInterval = 1 / fps;
+        let extractionTime = 0;
+
+        // 메모리 초과 방지를 위한 최대 렌더링 해상도 및 최대 프레임 수 제한
+        const MAX_DIMENSION = 800; 
+        const MAX_FRAMES = 150; // 30fps 기준 5초 분량
+
+        // 1. 비디오 파일 로드
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const fileURL = URL.createObjectURL(file);
+            video.src = fileURL;
+            statusMsg.innerText = "영상이 로드되었습니다. '영상 분석 준비' 버튼을 누르세요.";
+        });
+
+        // 2. 프레임 추출 시작
+        btnExtract.addEventListener('click', () => {
+            if (!video.src) {
+                alert("먼저 동영상 파일을 선택해주세요.");
+                return;
+            }
+
+            fps = parseInt(fpsInput.value) || 30;
+            frameInterval = 1 / fps;
+            frames = [];
+            dataPoints = [];
+            analyzeIndex = -1;
+            extractionTime = 0;
+
+            btnExtract.disabled = true;
+            fileInput.disabled = true;
+            fpsInput.disabled = true;
+            
+            loadingOverlay.style.display = 'block';
+            statusMsg.innerText = "2단계: 영상 처리 중...";
+
+            // 캔버스 크기를 영상 비율에 맞게 조정 (세로/가로 대응)
+            let vw = video.videoWidth;
+            let vh = video.videoHeight;
+            
+            if (vw > vh) {
+                if (vw > MAX_DIMENSION) { vh *= MAX_DIMENSION / vw; vw = MAX_DIMENSION; }
+            } else {
+                if (vh > MAX_DIMENSION) { vw *= MAX_DIMENSION / vh; vh = MAX_DIMENSION; }
+            }
+            
+            canvas.width = vw;
+            canvas.height = vh;
+
+            // 추출 루프 시작
+            video.currentTime = 0;
+            video.addEventListener('seeked', extractFrameListener);
+        });
+
+        // 프레임 추출 리스너 (seeked 이벤트 기반)
+        function extractFrameListener() {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            frames.push({
+                img: ctx.getImageData(0, 0, canvas.width, canvas.height),
+                time: extractionTime // 프레임의 기준 시간(초)
+            });
+
+            progressText.innerText = `(${frames.length} 프레임)`;
+            extractionTime += frameInterval;
+
+            // 영상이 끝났거나 최대 프레임 수에 도달하면 종료
+            if (extractionTime <= video.duration && frames.length < MAX_FRAMES) {
+                video.currentTime = extractionTime;
+            } else {
+                video.removeEventListener('seeked', extractFrameListener);
+                finishExtraction();
+            }
+        }
+
+        function finishExtraction() {
+            loadingOverlay.style.display = 'none';
+            if (frames.length > 0) {
+                analyzeIndex = 0;
+                statusMsg.innerText = `3단계: 분석 모드 (총 ${frames.length}프레임). 물체의 중심을 클릭하여 궤적을 기록하세요.`;
+                renderAnalyzeFrame();
+            } else {
+                statusMsg.innerText = "프레임 추출에 실패했습니다. 영상 포맷을 확인해주세요.";
+                btnExtract.disabled = false;
+            }
+        }
+
+        // 3. 분석 화면 렌더링
+        function renderAnalyzeFrame() {
+            ctx.putImageData(frames[analyzeIndex].img, 0, 0);
+            
+            ctx.fillStyle = 'red';
+            for (let i = 0; i < dataPoints.length; i++) {
+                ctx.beginPath();
+                ctx.arc(dataPoints[i].x, dataPoints[i].y, 5, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                if (i > 0) {
+                    ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(dataPoints[i-1].x, dataPoints[i-1].y);
+                    ctx.lineTo(dataPoints[i].x, dataPoints[i].y);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // 4. 클릭 이벤트 (위치 좌표 기록)
+        canvas.addEventListener('click', (e) => {
+            if (analyzeIndex >= 0 && analyzeIndex < frames.length) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                const clickX = (e.clientX - rect.left) * scaleX;
+                const clickY = (e.clientY - rect.top) * scaleY;
+
+                dataPoints.push({
+                    time: frames[analyzeIndex].time,
+                    x: clickX,
+                    y: clickY
+                });
+
+                analyzeIndex++;
+                
+                if (analyzeIndex < frames.length) {
+                    statusMsg.innerText = `3단계: 분석 중 (${analyzeIndex + 1} / ${frames.length} 프레임)`;
+                    renderAnalyzeFrame();
+                } else {
+                    statusMsg.innerText = "분석 완료! 그래프와 CSV 데이터를 확인하세요.";
+                    renderAnalyzeFrame(); // 마지막 궤적 선 그려주기
+                    drawGraph();
+                    btnCsv.style.display = 'inline-block';
+                }
+            }
+        });
+
+        // 5. 결과 그래프 그리기
+        function drawGraph() {
+            chartWrapper.style.display = 'block';
+            const ctxChart = document.getElementById('chart').getContext('2d');
+            
+            // 처음 클릭한 시간을 0초로 맞추기 위한 보정
+            const startTime = dataPoints[0].time;
+            
+            const scatterData = dataPoints.map(dp => ({
+                x: (dp.time - startTime).toFixed(4),
+                y: dp.y.toFixed(1)
+            }));
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctxChart, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: '시간(t)에 따른 Y좌표 (Pixel)',
+                        data: scatterData,
+                        backgroundColor: 'red',
+                        borderColor: 'red',
+                        showLine: true,
+                        fill: false,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: { display: true, text: '경과 시간 (초)', font: {size: 14} }
+                        },
+                        y: {
+                            reverse: true, // 영상 픽셀계에 맞춰 아래로 떨어지는 모습을 직관적으로 표시
+                            title: { display: true, text: '낙하 거리 Y (Pixel)', font: {size: 14} }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 6. CSV 다운로드 기능
+        btnCsv.addEventListener('click', () => {
+            const startTime = dataPoints[0].time;
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Time (s),X Position (px),Y Position (px)\n";
+            
+            dataPoints.forEach(row => {
+                const relTime = row.time - startTime;
+                csvContent += `${relTime.toFixed(4)},${row.x.toFixed(1)},${row.y.toFixed(1)}\n`;
+            });
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "free_fall_analysis.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        // 초기화 버튼
+        btnReset.addEventListener('click', () => {
+            location.reload();
+        });
+    </script>
+</body>
+</html>
