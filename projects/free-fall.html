@@ -115,6 +115,7 @@
         <p>스마트폰 영상을 업로드하여 물체의 궤적을 분석하고 다중섬광사진을 합성해 보세요.</p>
         
         <div class="controls">
+            <!-- 사진이 선택되지 않도록 video/* 로 다시 제한 -->
             <input type="file" id="video-upload" accept="video/*">
             <div class="fps-control">
                 <label for="fps-input">영상 FPS:</label>
@@ -129,13 +130,11 @@
         <div id="status-msg">1단계: 동영상 파일을 선택하고 '영상 분석 준비'를 누르세요.</div>
         <div id="loading-overlay">영상을 추출하고 있습니다... <span id="progress-text"></span></div>
 
-        <!-- 궤적 분석 캔버스 -->
         <div id="video-container">
             <video id="video" playsinline preload="auto"></video>
             <canvas id="canvas" width="640" height="480"></canvas>
         </div>
 
-        <!-- 다중섬광사진 결과 캔버스 (처음엔 숨김) -->
         <div id="strobo-container" style="display:none; width:100%;">
             <h2 class="section-title">합성된 다중섬광사진</h2>
             <p>※ 배경이 밝고 카메라가 고정되어 있을수록 결과물이 깨끗합니다.</p>
@@ -143,7 +142,6 @@
             <button id="btn-download-strobo" style="margin-top: 10px; background-color: #17a2b8;">🖼️ 사진 다운로드</button>
         </div>
 
-        <!-- 결과 그래프 -->
         <div class="chart-container" id="chart-wrapper">
             <h2 class="section-title">자유낙하 t-y 그래프</h2>
             <canvas id="chart"></canvas>
@@ -191,6 +189,12 @@
             statusMsg.innerText = "영상이 로드되었습니다. '영상 분석 준비' 버튼을 누르세요.";
         });
 
+        video.addEventListener('error', () => {
+            alert("브라우저에서 지원하지 않는 영상 포맷이거나 파일이 손상되었습니다. 다른 영상을 선택해 주세요.");
+            btnExtract.disabled = false;
+            statusMsg.innerText = "에러: 영상을 읽을 수 없습니다.";
+        });
+
         btnExtract.addEventListener('click', () => {
             if (!video.src) { alert("동영상 파일을 선택해주세요."); return; }
 
@@ -236,7 +240,7 @@
                 analyzeIndex = 0;
                 statusMsg.innerText = `3단계: 총 ${frames.length}프레임. 물체를 클릭하여 궤적을 그리거나 '다중섬광사진 합성'을 누르세요.`;
                 renderAnalyzeFrame();
-                btnStrobo.style.display = 'inline-block'; // 궤적 분석 없이 바로 합성도 가능하도록 오픈
+                btnStrobo.style.display = 'inline-block'; 
             } else {
                 statusMsg.innerText = "프레임 추출 실패. 영상 포맷을 확인해주세요.";
                 btnExtract.disabled = false;
@@ -281,16 +285,13 @@
             if (frames.length === 0) return;
             stroboContainer.style.display = 'block';
             
-            // 오프스크린 캔버스를 만들어 ImageData를 Image 형식으로 변환 후 블렌딩
             const offCanvas = document.createElement('canvas');
             offCanvas.width = canvas.width; offCanvas.height = canvas.height;
             const offCtx = offCanvas.getContext('2d');
 
-            // 첫 번째 프레임을 배경으로 그림
             offCtx.putImageData(frames[0].img, 0, 0);
             ctxStrobo.drawImage(offCanvas, 0, 0);
             
-            // 혼합 모드 설정: 배경보다 어두운 부분(보통 떨어지는 물체)만 화면에 남김
             ctxStrobo.globalCompositeOperation = 'darken';
 
             for (let i = 1; i < frames.length; i++) {
@@ -298,26 +299,52 @@
                 ctxStrobo.drawImage(offCanvas, 0, 0);
             }
             
-            // 모드 초기화
             ctxStrobo.globalCompositeOperation = 'source-over';
             
-            // (선택 사항) 사진 위에도 궤적 선 그려주기
+            // 객체 중심점과 타임스탬프 표시
             if (dataPoints.length > 0) {
-                ctxStrobo.fillStyle = 'red';
+                const startTime = dataPoints[0].time;
+
                 for (let i = 0; i < dataPoints.length; i++) {
-                    ctxStrobo.beginPath(); ctxStrobo.arc(dataPoints[i].x, dataPoints[i].y, 4, 0, 2 * Math.PI); ctxStrobo.fill();
+                    // 점 그리기
+                    ctxStrobo.fillStyle = 'red';
+                    ctxStrobo.beginPath(); 
+                    ctxStrobo.arc(dataPoints[i].x, dataPoints[i].y, 5, 0, 2 * Math.PI); 
+                    ctxStrobo.fill();
+
+                    // 타임스탬프 텍스트 그리기 (가독성을 위한 그림자 효과 추가)
+                    const timeText = (dataPoints[i].time - startTime).toFixed(3) + "s";
+                    ctxStrobo.font = "bold 16px 'Segoe UI', Arial, sans-serif";
+                    ctxStrobo.fillStyle = "yellow";
+                    ctxStrobo.shadowColor = "black";
+                    ctxStrobo.shadowBlur = 4;
+                    ctxStrobo.shadowOffsetX = 1;
+                    ctxStrobo.shadowOffsetY = 1;
+                    
+                    // 점의 오른쪽 약간 아래에 텍스트 배치
+                    ctxStrobo.fillText(timeText, dataPoints[i].x + 12, dataPoints[i].y + 6);
+                    
+                    // 그림자 초기화 (선 그리기 위해)
+                    ctxStrobo.shadowColor = "transparent";
+                    ctxStrobo.shadowBlur = 0;
+                    ctxStrobo.shadowOffsetX = 0;
+                    ctxStrobo.shadowOffsetY = 0;
+
+                    // 궤적 선 그리기
                     if (i > 0) {
-                        ctxStrobo.strokeStyle = 'rgba(255, 0, 0, 0.5)'; ctxStrobo.lineWidth = 2;
-                        ctxStrobo.beginPath(); ctxStrobo.moveTo(dataPoints[i-1].x, dataPoints[i-1].y); ctxStrobo.lineTo(dataPoints[i].x, dataPoints[i].y); ctxStrobo.stroke();
+                        ctxStrobo.strokeStyle = 'rgba(255, 0, 0, 0.5)'; 
+                        ctxStrobo.lineWidth = 2;
+                        ctxStrobo.beginPath(); 
+                        ctxStrobo.moveTo(dataPoints[i-1].x, dataPoints[i-1].y); 
+                        ctxStrobo.lineTo(dataPoints[i].x, dataPoints[i].y); 
+                        ctxStrobo.stroke();
                     }
                 }
             }
             
-            // 화면 스크롤 부드럽게 이동
             stroboContainer.scrollIntoView({ behavior: 'smooth' });
         });
 
-        // 사진 다운로드
         btnDownloadStrobo.addEventListener('click', () => {
             const link = document.createElement('a');
             link.download = 'stroboscopic_image.png';
@@ -325,7 +352,6 @@
             link.click();
         });
 
-        // 차트 그리기
         function drawGraph() {
             chartWrapper.style.display = 'block';
             const ctxChart = document.getElementById('chart').getContext('2d');
