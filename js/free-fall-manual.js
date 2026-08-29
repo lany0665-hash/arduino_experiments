@@ -205,8 +205,14 @@ canvas.addEventListener('click', (event) => {
     if (!isSelectingMode) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    
+    // Canvas의 실제 픽셀 크기와 CSS 표시 크기의 비율 계산
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    // 클릭 위치를 Canvas 픽셀 좌표로 변환
+    const x = (event.clientX - rect.left) * scaleX;
+    const y = (event.clientY - rect.top) * scaleY;
 
     // 이미 이 프레임에서 선택했다면 기존 점 제거
     const existingIndex = dataPoints.findIndex(d => d.frameIndex === currentFrameIndex);
