@@ -208,9 +208,15 @@ let touchStartX = 0;
 let touchStartY = 0;
 
 canvas.addEventListener('touchstart', (event) => {
+    if (!isSelectingMode) return;
     touchStartX = event.touches[0].clientX;
     touchStartY = event.touches[0].clientY;
-});
+}, false);
+
+canvas.addEventListener('touchmove', (event) => {
+    // 스와이프 중 기본 동작 방지 (스크롤 방지)
+    event.preventDefault();
+}, false);
 
 canvas.addEventListener('touchend', (event) => {
     if (!isSelectingMode) return;
@@ -221,20 +227,85 @@ canvas.addEventListener('touchend', (event) => {
     const deltaY = touchEndY - touchStartY;
     
     // 수평 스와이프 감지 (세로보다 가로 이동이 더 많음)
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+    // 최소 30px 이상의 스와이프만 감지
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 30) {
         if (deltaX > 0) {
-            // 오른쪽으로 스와이프 → 이전 프레임
-            displayFrame(currentFrameIndex - 1);
-        } else {
-            // 왼쪽으로 스와이프 → 다음 프레임
+            // 오른쪽으로 스와이프 → 다음 프레임
             displayFrame(currentFrameIndex + 1);
+        } else {
+            // 왼쪽으로 스와이프 → 이전 프레임
+            displayFrame(currentFrameIndex - 1);
         }
+    }
+}, false);
+
+/* ========================================
+   마우스 및 터치 - 클릭/탭으로 점 선택 + 드래그 스와이프
+   ======================================== */
+
+let mouseDownX = 0;
+let mouseDownY = 0;
+let isMouseDown = false;
+
+canvas.addEventListener('mousedown', (event) => {
+    if (!isSelectingMode) return;
+    isMouseDown = true;
+    mouseDownX = event.clientX;
+    mouseDownY = event.clientY;
+});
+
+canvas.addEventListener('mousemove', (event) => {
+    // 드래그 중에는 기본 선택 동작 방지
+    if (isMouseDown) {
+        event.preventDefault();
     }
 });
 
-/* ========================================
-   마우스 및 터치 - 클릭/탭으로 점 선택
-   ======================================== */
+canvas.addEventListener('mouseup', (event) => {
+    if (!isSelectingMode || !isMouseDown) return;
+    isMouseDown = false;
+    
+    const mouseUpX = event.clientX;
+    const mouseUpY = event.clientY;
+    const deltaX = mouseUpX - mouseDownX;
+    const deltaY = mouseUpY - mouseDownY;
+    
+    // 충분한 거리의 드래그가 감지되면 스와이프로 처리
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 40) {
+        if (deltaX > 0) {
+            // 오른쪽으로 드래그 → 다음 프레임
+            displayFrame(currentFrameIndex + 1);
+        } else {
+            // 왼쪽으로 드래그 → 이전 프레임
+            displayFrame(currentFrameIndex - 1);
+        }
+    } else if (Math.abs(deltaX) <= 10 && Math.abs(deltaY) <= 10) {
+        // 거의 움직이지 않으면 클릭으로 취급 (점 선택)
+        const { x, y } = getCanvasCoordinates(event);
+
+        // 이미 이 프레임에서 선택했다면 기존 점 제거
+        const existingIndex = dataPoints.findIndex(d => d.frameIndex === currentFrameIndex);
+        if (existingIndex >= 0) {
+            dataPoints.splice(existingIndex, 1);
+        }
+
+        // 새로운 점 추가
+        dataPoints.push({
+            time: frames[currentFrameIndex].time,
+            x: x,
+            y: y,
+            frameIndex: currentFrameIndex
+        });
+
+        selectedCount.innerText = dataPoints.length;
+        displayFrame(currentFrameIndex);
+
+        // 자동으로 다음 프레임으로 이동 (선택적)
+        if (currentFrameIndex < frames.length - 1) {
+            setTimeout(() => displayFrame(currentFrameIndex + 1), 300);
+        }
+    }
+});
 
 function getCanvasCoordinates(event) {
     const rect = canvas.getBoundingClientRect();
@@ -262,35 +333,6 @@ function getCanvasCoordinates(event) {
     
     return { x, y };
 }
-
-// 캔버스 클릭 이벤트 - 물체 중심 선택
-canvas.addEventListener('click', (event) => {
-    if (!isSelectingMode) return;
-
-    const { x, y } = getCanvasCoordinates(event);
-
-    // 이미 이 프레임에서 선택했다면 기존 점 제거
-    const existingIndex = dataPoints.findIndex(d => d.frameIndex === currentFrameIndex);
-    if (existingIndex >= 0) {
-        dataPoints.splice(existingIndex, 1);
-    }
-
-    // 새로운 점 추가
-    dataPoints.push({
-        time: frames[currentFrameIndex].time,
-        x: x,
-        y: y,
-        frameIndex: currentFrameIndex
-    });
-
-    selectedCount.innerText = dataPoints.length;
-    displayFrame(currentFrameIndex);
-
-    // 자동으로 다음 프레임으로 이동 (선택적)
-    if (currentFrameIndex < frames.length - 1) {
-        setTimeout(() => displayFrame(currentFrameIndex + 1), 300);
-    }
-});
 
 btnUndoPoint.addEventListener('click', () => {
     if (dataPoints.length > 0) {
