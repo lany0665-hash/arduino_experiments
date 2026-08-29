@@ -200,19 +200,74 @@ btnManualTrack.addEventListener('click', () => {
     statusMsg.innerText = "3단계: 캔버스 위의 물체 중심을 클릭하세요. 프레임 네비게이션을 사용하여 다음 선택 위치로 이동하세요.";
 });
 
+/* ========================================
+   제스처 및 터치 이벤트 - 스와이프
+   ======================================== */
+
+let touchStartX = 0;
+let touchStartY = 0;
+
+canvas.addEventListener('touchstart', (event) => {
+    touchStartX = event.touches[0].clientX;
+    touchStartY = event.touches[0].clientY;
+});
+
+canvas.addEventListener('touchend', (event) => {
+    if (!isSelectingMode) return;
+    
+    const touchEndX = event.changedTouches[0].clientX;
+    const touchEndY = event.changedTouches[0].clientY;
+    const deltaX = touchEndX - touchStartX;
+    const deltaY = touchEndY - touchStartY;
+    
+    // 수평 스와이프 감지 (세로보다 가로 이동이 더 많음)
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+        if (deltaX > 0) {
+            // 오른쪽으로 스와이프 → 이전 프레임
+            displayFrame(currentFrameIndex - 1);
+        } else {
+            // 왼쪽으로 스와이프 → 다음 프레임
+            displayFrame(currentFrameIndex + 1);
+        }
+    }
+});
+
+/* ========================================
+   마우스 및 터치 - 클릭/탭으로 점 선택
+   ======================================== */
+
+function getCanvasCoordinates(event) {
+    const rect = canvas.getBoundingClientRect();
+    
+    // devicePixelRatio를 고려한 정확한 스케일 계산
+    const canvasDisplayWidth = rect.width;
+    const canvasDisplayHeight = rect.height;
+    const canvasActualWidth = canvas.width;
+    const canvasActualHeight = canvas.height;
+    
+    let clientX, clientY;
+    if (event.touches) {
+        clientX = event.touches[0].clientX;
+        clientY = event.touches[0].clientY;
+    } else {
+        clientX = event.clientX;
+        clientY = event.clientY;
+    }
+    
+    const scaleX = canvasActualWidth / canvasDisplayWidth;
+    const scaleY = canvasActualHeight / canvasDisplayHeight;
+    
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    
+    return { x, y };
+}
+
 // 캔버스 클릭 이벤트 - 물체 중심 선택
 canvas.addEventListener('click', (event) => {
     if (!isSelectingMode) return;
 
-    const rect = canvas.getBoundingClientRect();
-    
-    // Canvas의 실제 픽셀 크기와 CSS 표시 크기의 비율 계산
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    // 클릭 위치를 Canvas 픽셀 좌표로 변환
-    const x = (event.clientX - rect.left) * scaleX;
-    const y = (event.clientY - rect.top) * scaleY;
+    const { x, y } = getCanvasCoordinates(event);
 
     // 이미 이 프레임에서 선택했다면 기존 점 제거
     const existingIndex = dataPoints.findIndex(d => d.frameIndex === currentFrameIndex);
