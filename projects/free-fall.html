@@ -91,16 +91,18 @@
             position: relative;
             display: inline-block;
             margin: 20px 0;
+            width: 100%;
         }
         
         canvas {
             border: 2px solid #333;
             border-radius: 4px;
             background-color: #fff;
-            max-width: 100%;
+            width: 100%;
             height: auto;
             cursor: crosshair;
             display: block;
+            touch-action: none;
         }
         
         video { display: none; }
@@ -166,24 +168,34 @@
         }
         
         .frame-nav {
-            margin: 15px 0;
+            margin: 10px 0 15px 0;
             display: flex;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
             align-items: center;
             flex-wrap: wrap;
+            background-color: #f1f3f5;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.95em;
         }
         
         .frame-nav button {
-            padding: 8px 15px;
-            font-size: 14px;
+            padding: 6px 12px;
+            font-size: 13px;
+            min-width: 50px;
         }
         
         .frame-nav input {
-            width: 80px;
-            padding: 8px;
-            font-size: 14px;
+            width: 60px;
+            padding: 6px;
+            font-size: 13px;
             text-align: center;
+        }
+        
+        .frame-nav span {
+            font-size: 13px;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -218,7 +230,16 @@
             <button id="btn-csv" style="display:none; background-color: #28a745;">📊 CSV 다운로드</button>
         </div>
 
-        <!-- 프레임 네비게이션 -->
+        <div id="tracking-info">선택된 점: <span id="selected-count">0</span>개</div>
+        <div class="notice">※ 캔버스 위의 물체 중심을 클릭하여 선택하세요. 선택된 프레임 간격으로 다중섬광사진이 합성됩니다.</div>
+
+        <!-- 비디오 및 캔버스 -->
+        <div id="video-container">
+            <video id="video" playsinline preload="auto"></video>
+            <canvas id="canvas" width="640" height="480"></canvas>
+        </div>
+
+        <!-- 프레임 네비게이션 (canvas 바로 아래) -->
         <div class="frame-nav" id="frame-nav-controls" style="display:none;">
             <button id="btn-prev-frame">⬅️ 이전</button>
             <div>
@@ -227,17 +248,8 @@
             </div>
             <span id="frame-total">/ 0</span>
             <button id="btn-next-frame">다음 ➡️</button>
-            <button id="btn-undo-point">↩️ 마지막 선택 취소</button>
-            <button id="btn-clear-points">🗑️ 모든 선택 초기화</button>
-        </div>
-
-        <div id="tracking-info">선택된 점: <span id="selected-count">0</span>개</div>
-        <div class="notice">※ 캔버스 위의 물체 중심을 클릭하여 선택하세요. 선택된 프레임 간격으로 다중섬광사진이 합성됩니다.</div>
-
-        <!-- 비디오 및 캔버스 -->
-        <div id="video-container">
-            <video id="video" playsinline preload="auto"></video>
-            <canvas id="canvas" width="640" height="480"></canvas>
+            <button id="btn-undo-point">↩️ 취소</button>
+            <button id="btn-clear-points">🗑️ 초기화</button>
         </div>
 
         <!-- 합성된 다중섬광사진 -->
