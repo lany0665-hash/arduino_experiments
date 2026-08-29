@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>자유낙하 다중섬광사진 및 자동 궤적 분석</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta name="description" content="자유낙하 궤적 분석 & 다중섬광사진 - 수동 객체 선택 방식">
+    <title>자유낙하 다중섬광사진 및 수동 궤적 분석</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <link rel="stylesheet" href="../css/style.css">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
             text-align: center;
@@ -21,6 +23,8 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         h1 { color: #333; }
+        h2 { color: #555; margin-top: 25px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        
         .controls, .slider-controls {
             margin: 15px 0;
             display: flex;
@@ -32,6 +36,7 @@
             padding: 15px;
             border-radius: 8px;
         }
+        
         input[type="file"] {
             padding: 10px;
             background-color: #fff;
@@ -39,21 +44,25 @@
             border-radius: 5px;
             cursor: pointer;
         }
+        
         .control-group {
             display: flex;
             align-items: center;
             gap: 5px;
             font-weight: bold;
         }
+        
         .control-group input[type="number"] {
             width: 60px;
             padding: 5px;
             font-size: 16px;
             text-align: center;
         }
+        
         .control-group input[type="range"] {
             cursor: pointer;
         }
+        
         button {
             padding: 10px 20px;
             font-size: 16px;
@@ -65,63 +74,125 @@
             cursor: pointer;
             transition: background-color 0.2s;
         }
+        
         button:hover { background-color: #0056b3; }
         button:disabled { background-color: #cccccc; cursor: not-allowed; }
         
-        #btn-auto-track { background-color: #dc3545; display: none; }
-        #btn-auto-track:hover { background-color: #c82333; }
+        #btn-manual-track { background-color: #dc3545; display: none; }
+        #btn-manual-track:hover { background-color: #c82333; }
         #btn-strobo { background-color: #6f42c1; display: none; }
         #btn-strobo:hover { background-color: #5a32a3; }
+        #btn-undo-point { background-color: #fd7e14; display: none; }
+        #btn-undo-point:hover { background-color: #e86c00; }
+        #btn-clear-points { background-color: #ffc107; color: #333; display: none; }
+        #btn-clear-points:hover { background-color: #ffb800; }
         
-        #video-container, #strobo-container {
+        #video-container {
             position: relative;
             display: inline-block;
-            margin-bottom: 20px;
+            margin: 20px 0;
         }
+        
         canvas {
             border: 2px solid #333;
             border-radius: 4px;
             background-color: #fff;
             max-width: 100%;
             height: auto;
+            cursor: crosshair;
+            display: block;
         }
+        
         video { display: none; }
         
         #status-msg {
-            font-size: 1.2em;
+            font-size: 1.1em;
             font-weight: bold;
             color: #d35400;
-            margin-bottom: 15px;
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            border-radius: 4px;
         }
+        
         .chart-container {
             width: 100%;
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             display: none;
+            margin-top: 20px;
         }
+        
         #loading-overlay {
             display: none;
             color: #28a745;
             font-weight: bold;
             margin-top: 10px;
         }
+        
         .section-title {
             margin-top: 30px;
             border-top: 2px dashed #ccc;
             padding-top: 20px;
         }
+        
         .notice {
-            font-size: 0.9em;
+            font-size: 0.95em;
             color: #666;
-            margin-top: 5px;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            border-radius: 4px;
+        }
+        
+        #tracking-info {
+            font-size: 1em;
+            color: #28a745;
+            font-weight: bold;
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        #strobo-container {
+            display: none;
+            width: 100%;
+            margin-top: 20px;
+        }
+        
+        .frame-nav {
+            margin: 15px 0;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .frame-nav button {
+            padding: 8px 15px;
+            font-size: 14px;
+        }
+        
+        .frame-nav input {
+            width: 80px;
+            padding: 8px;
+            font-size: 14px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>자유낙하 궤적 분석 & 다중섬광사진 (자동 인식)</h1>
-        <p>물체의 중심을 자동으로 추적하고 원하는 간격으로 다중섬광사진을 합성합니다.</p>
+        <h1>자유낙하 궤적 분석 & 다중섬광사진 (수동 선택)</h1>
+        <p>물체의 중심을 직접 선택하여 다중섬광사진을 합성합니다.</p>
         
+        <!-- 단계 1: 영상 로드 -->
         <div class="controls">
             <input type="file" id="video-upload" accept="video/*">
             <div class="control-group">
@@ -132,310 +203,57 @@
             <button id="btn-reset">🔄 초기화</button>
         </div>
 
+        <div id="status-msg">1단계: 동영상 파일을 선택하고 '영상 로드 및 추출'을 누르세요.</div>
+        <div id="loading-overlay">영상을 추출하고 있습니다... <span id="progress-text"></span></div>
+
+        <!-- 단계 2: 프레임 네비게이션 및 물체 선택 -->
         <div class="slider-controls" id="track-controls" style="display:none;">
-            <div class="control-group">
-                <label for="threshold-slider">인식 민감도:</label>
-                <input type="range" id="threshold-slider" min="10" max="150" value="40">
-            </div>
             <div class="control-group">
                 <label for="step-slider">다중섬광 프레임 간격:</label>
                 <input type="range" id="step-slider" min="1" max="15" value="2">
                 <span id="step-val">2</span>
             </div>
-            <button id="btn-auto-track">자동 추적 및 합성 실행</button>
+            <button id="btn-manual-track">수동 선택 시작</button>
+            <button id="btn-strobo" style="background-color: #28a745;">✓ 합성 실행</button>
             <button id="btn-csv" style="display:none; background-color: #28a745;">📊 CSV 다운로드</button>
         </div>
 
-        <div id="status-msg">1단계: 동영상 파일을 선택하고 '영상 로드 및 추출'을 누르세요.</div>
-        <div class="notice">※ 정확한 자동 인식을 위해 카메라가 완벽히 고정된 영상이어야 합니다.</div>
-        <div id="loading-overlay">영상을 추출하고 있습니다... <span id="progress-text"></span></div>
+        <!-- 프레임 네비게이션 -->
+        <div class="frame-nav" id="frame-nav-controls" style="display:none;">
+            <button id="btn-prev-frame">⬅️ 이전</button>
+            <div>
+                <label for="frame-input">프레임:</label>
+                <input type="number" id="frame-input" value="1" min="1">
+            </div>
+            <span id="frame-total">/ 0</span>
+            <button id="btn-next-frame">다음 ➡️</button>
+            <button id="btn-undo-point">↩️ 마지막 선택 취소</button>
+            <button id="btn-clear-points">🗑️ 모든 선택 초기화</button>
+        </div>
 
+        <div id="tracking-info">선택된 점: <span id="selected-count">0</span>개</div>
+        <div class="notice">※ 캔버스 위의 물체 중심을 클릭하여 선택하세요. 선택된 프레임 간격으로 다중섬광사진이 합성됩니다.</div>
+
+        <!-- 비디오 및 캔버스 -->
         <div id="video-container">
             <video id="video" playsinline preload="auto"></video>
             <canvas id="canvas" width="640" height="480"></canvas>
         </div>
 
-        <div id="strobo-container" style="display:none; width:100%;">
-            <h2 class="section-title">합성된 다중섬광사진</h2>
+        <!-- 합성된 다중섬광사진 -->
+        <div id="strobo-container">
+            <h2>합성된 다중섬광사진</h2>
             <canvas id="canvas-strobo"></canvas><br>
             <button id="btn-download-strobo" style="margin-top: 10px; background-color: #17a2b8;">🖼️ 사진 다운로드</button>
         </div>
 
+        <!-- 자유낙하 t-y 그래프 -->
         <div class="chart-container" id="chart-wrapper">
-            <h2 class="section-title">자유낙하 t-y 그래프</h2>
+            <h2>자유낙하 t-y 그래프</h2>
             <canvas id="chart"></canvas>
         </div>
     </div>
 
-    <script>
-        const fileInput = document.getElementById('video-upload');
-        const fpsInput = document.getElementById('fps-input');
-        const thresholdSlider = document.getElementById('threshold-slider');
-        const stepSlider = document.getElementById('step-slider');
-        const stepVal = document.getElementById('step-val');
-        
-        const btnExtract = document.getElementById('btn-extract');
-        const btnAutoTrack = document.getElementById('btn-auto-track');
-        const btnReset = document.getElementById('btn-reset');
-        const btnCsv = document.getElementById('btn-csv');
-        const btnDownloadStrobo = document.getElementById('btn-download-strobo');
-        
-        const statusMsg = document.getElementById('status-msg');
-        const loadingOverlay = document.getElementById('loading-overlay');
-        const progressText = document.getElementById('progress-text');
-        const trackControls = document.getElementById('track-controls');
-        const stroboContainer = document.getElementById('strobo-container');
-        
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        
-        const canvasStrobo = document.getElementById('canvas-strobo');
-        const ctxStrobo = canvasStrobo.getContext('2d', { willReadFrequently: true });
-        const chartWrapper = document.getElementById('chart-wrapper');
-        
-        let frames = [];
-        let dataPoints = [];
-        let chartInstance = null;
-        let fps = 30;
-        let frameInterval = 1 / fps;
-        let extractionTime = 0;
-
-        const MAX_DIMENSION = 800; 
-        const MAX_FRAMES = 150; 
-
-        // 슬라이더 텍스트 실시간 업데이트
-        stepSlider.addEventListener('input', (e) => {
-            stepVal.innerText = e.target.value;
-        });
-
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const fileURL = URL.createObjectURL(file);
-            video.src = fileURL;
-            statusMsg.innerText = "영상이 로드되었습니다. '영상 로드 및 추출' 버튼을 누르세요.";
-        });
-
-        video.addEventListener('error', () => {
-            alert("브라우저에서 지원하지 않는 영상 포맷입니다.");
-            btnExtract.disabled = false;
-        });
-
-        btnExtract.addEventListener('click', () => {
-            if (!video.src) { alert("동영상 파일을 선택해주세요."); return; }
-
-            fps = parseInt(fpsInput.value) || 30;
-            frameInterval = 1 / fps;
-            frames = []; 
-            extractionTime = 0;
-
-            btnExtract.disabled = true; fileInput.disabled = true; fpsInput.disabled = true;
-            loadingOverlay.style.display = 'block';
-            statusMsg.innerText = "2단계: 프레임 추출 중...";
-
-            let vw = video.videoWidth; let vh = video.videoHeight;
-            if (vw > vh) { if (vw > MAX_DIMENSION) { vh *= MAX_DIMENSION / vw; vw = MAX_DIMENSION; } } 
-            else { if (vh > MAX_DIMENSION) { vw *= MAX_DIMENSION / vh; vh = MAX_DIMENSION; } }
-            
-            canvas.width = vw; canvas.height = vh;
-            canvasStrobo.width = vw; canvasStrobo.height = vh;
-
-            video.currentTime = 0;
-            video.addEventListener('seeked', extractFrameListener);
-        });
-
-        function extractFrameListener() {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            frames.push({
-                img: ctx.getImageData(0, 0, canvas.width, canvas.height),
-                time: extractionTime 
-            });
-            progressText.innerText = `(${frames.length} 프레임)`;
-            extractionTime += frameInterval;
-
-            if (extractionTime <= video.duration && frames.length < MAX_FRAMES) {
-                video.currentTime = extractionTime;
-            } else {
-                video.removeEventListener('seeked', extractFrameListener);
-                finishExtraction();
-            }
-        }
-
-        function finishExtraction() {
-            loadingOverlay.style.display = 'none';
-            if (frames.length > 0) {
-                // 첫 번째 프레임을 화면에 표시
-                ctx.putImageData(frames[0].img, 0, 0);
-                trackControls.style.display = 'flex';
-                btnAutoTrack.style.display = 'inline-block';
-                statusMsg.innerText = `3단계: 설정 조절 후 '자동 추적 및 합성 실행'을 누르세요.`;
-            } else {
-                statusMsg.innerText = "프레임 추출 실패. 영상 포맷을 확인해주세요.";
-                btnExtract.disabled = false;
-            }
-        }
-
-        // --- 자동 추적 및 합성 핵심 로직 ---
-        btnAutoTrack.addEventListener('click', () => {
-            dataPoints = [];
-            const threshold = parseInt(thresholdSlider.value);
-            const step = parseInt(stepSlider.value);
-            
-            // 첫 번째 프레임을 배경(기준)으로 설정
-            const baseData = frames[0].img.data; 
-            
-            // 1. 프레임별 물체 위치(중심점) 자동 계산
-            for (let i = 1; i < frames.length; i++) {
-                const currentData = frames[i].img.data;
-                let sumX = 0, sumY = 0, count = 0;
-                
-                for (let j = 0; j < currentData.length; j += 4) {
-                    const rDiff = Math.abs(currentData[j] - baseData[j]);
-                    const gDiff = Math.abs(currentData[j+1] - baseData[j+1]);
-                    const bDiff = Math.abs(currentData[j+2] - baseData[j+2]);
-                    
-                    // RGB 차이의 평균값이 임계값 이상인 픽셀(움직인 물체) 수집
-                    const diff = (rDiff + gDiff + bDiff) / 3;
-                    
-                    if (diff > threshold) { 
-                        const pixelIndex = j / 4;
-                        const x = pixelIndex % canvas.width;
-                        const y = Math.floor(pixelIndex / canvas.width);
-                        sumX += x;
-                        sumY += y;
-                        count++;
-                    }
-                }
-                
-                // 노이즈 방지를 위해 변화된 픽셀이 일정 개수 이상일 때만 중심 좌표 기록
-                if (count > 20) { 
-                    dataPoints.push({
-                        time: frames[i].time,
-                        x: sumX / count,
-                        y: sumY / count,
-                        frameIndex: i
-                    });
-                }
-            }
-            
-            // 2. 다중섬광사진 합성 (선택된 프레임 간격(step) 적용)
-            stroboContainer.style.display = 'block';
-            
-            const offCanvas = document.createElement('canvas');
-            offCanvas.width = canvas.width; offCanvas.height = canvas.height;
-            const offCtx = offCanvas.getContext('2d');
-
-            // 첫 프레임(배경) 그리기
-            ctxStrobo.putImageData(frames[0].img, 0, 0);
-            ctxStrobo.globalCompositeOperation = 'darken';
-
-            // 슬라이더 간격(step)에 맞춰 프레임 겹치기
-            for (let i = step; i < frames.length; i += step) {
-                offCtx.putImageData(frames[i].img, 0, 0);
-                ctxStrobo.drawImage(offCanvas, 0, 0);
-            }
-            
-            ctxStrobo.globalCompositeOperation = 'source-over';
-            
-            // 3. 추출된 프레임 간격에 맞춰 중심점 궤적 및 시간 표시
-            if (dataPoints.length > 0) {
-                const startTime = frames[0].time;
-                let prevPoint = null;
-
-                for (let i = step; i < frames.length; i += step) {
-                    // 현재 프레임 인덱스에 해당하는 데이터 포인트 찾기
-                    const dp = dataPoints.find(d => d.frameIndex === i);
-                    
-                    if (dp) {
-                        ctxStrobo.fillStyle = 'red';
-                        ctxStrobo.beginPath(); 
-                        ctxStrobo.arc(dp.x, dp.y, 5, 0, 2 * Math.PI); 
-                        ctxStrobo.fill();
-
-                        // 타임스탬프 (가독성을 위한 그림자)
-                        const timeText = (dp.time - startTime).toFixed(3) + "s";
-                        ctxStrobo.font = "bold 16px 'Segoe UI', Arial, sans-serif";
-                        ctxStrobo.fillStyle = "yellow";
-                        ctxStrobo.shadowColor = "black";
-                        ctxStrobo.shadowBlur = 4;
-                        ctxStrobo.shadowOffsetX = 1;
-                        ctxStrobo.shadowOffsetY = 1;
-                        
-                        ctxStrobo.fillText(timeText, dp.x + 12, dp.y + 6);
-                        
-                        ctxStrobo.shadowColor = "transparent";
-                        ctxStrobo.shadowBlur = 0;
-                        ctxStrobo.shadowOffsetX = 0;
-                        ctxStrobo.shadowOffsetY = 0;
-
-                        // 선 긋기
-                        if (prevPoint) {
-                            ctxStrobo.strokeStyle = 'rgba(255, 0, 0, 0.5)'; 
-                            ctxStrobo.lineWidth = 2;
-                            ctxStrobo.beginPath(); 
-                            ctxStrobo.moveTo(prevPoint.x, prevPoint.y); 
-                            ctxStrobo.lineTo(dp.x, dp.y); 
-                            ctxStrobo.stroke();
-                        }
-                        prevPoint = dp;
-                    }
-                }
-            }
-            
-            statusMsg.innerText = "분석 완료! 그래프와 합성된 사진을 확인하세요.";
-            drawGraph();
-            btnCsv.style.display = 'inline-block';
-            stroboContainer.scrollIntoView({ behavior: 'smooth' });
-        });
-
-        btnDownloadStrobo.addEventListener('click', () => {
-            const link = document.createElement('a');
-            link.download = 'stroboscopic_image.png';
-            link.href = canvasStrobo.toDataURL('image/png');
-            link.click();
-        });
-
-        function drawGraph() {
-            chartWrapper.style.display = 'block';
-            const ctxChart = document.getElementById('chart').getContext('2d');
-            
-            if (dataPoints.length === 0) return;
-            
-            const startTime = frames[0].time;
-            const scatterData = dataPoints.map(dp => ({
-                x: (dp.time - startTime).toFixed(4), y: dp.y.toFixed(1)
-            }));
-
-            if (chartInstance) chartInstance.destroy();
-            chartInstance = new Chart(ctxChart, {
-                type: 'scatter',
-                data: {
-                    datasets: [{
-                        label: '자동 인식된 Y좌표 (Pixel)', data: scatterData,
-                        backgroundColor: 'red', borderColor: 'red', showLine: true, fill: false, tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        x: { type: 'linear', position: 'bottom', title: { display: true, text: '경과 시간 (초)', font: {size: 14} } },
-                        y: { reverse: true, title: { display: true, text: '낙하 거리 Y (Pixel)', font: {size: 14} } }
-                    }
-                }
-            });
-        }
-
-        btnCsv.addEventListener('click', () => {
-            if (dataPoints.length === 0) return;
-            const startTime = frames[0].time;
-            let csvContent = "data:text/csv;charset=utf-8,Time (s),X Position (px),Y Position (px)\n";
-            dataPoints.forEach(row => { csvContent += `${(row.time - startTime).toFixed(4)},${row.x.toFixed(1)},${row.y.toFixed(1)}\n`; });
-            const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "free_fall_analysis.csv");
-            document.body.appendChild(link); link.click(); document.body.removeChild(link);
-        });
-
-        btnReset.addEventListener('click', () => { location.reload(); });
-    </script>
+    <script src="../js/free-fall-manual.js" defer></script>
 </body>
 </html>
