@@ -1,68 +1,241 @@
-/* 공통 스타일 시트 */
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background-color: #f9f9f9; }
-.container { background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 95%; max-width: 1600px; margin-bottom: 20px; }
-.project-list { list-style: none; padding: 0; }
-.project-list li { margin: 15px 0; }
-.project-list a { text-decoration: none; font-size: 1.5em; color: #007BFF; }
-.project-list a:hover { text-decoration: underline; }
-.main-layout { display: flex; gap: 20px; margin-top: 20px; }
-.content-column { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.connection-section { border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center; }
-.connection-section h3 { margin-top: 0; }
-.button-group { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: center;}
-button, select, input[type="number"] { padding: 10px; font-size: 1em; border-radius: 5px; border: 1px solid #ccc; }
-button { cursor: pointer; color: white; transition: background-color 0.3s; border: none; }
-.ble-button { background-color: #007BFF; }
-.sim-button { background-color: #58af5b; }
-#recordButton { background-color: #28A745; }
-#downloadButton { background-color: #17A2B8; }
-#fitButton { background-color: #6f42c1; }
-#resetZoomButton { background-color: #6c757d;}
-button:disabled { background-color: #ccc; cursor: not-allowed; }
-#status, #equation { font-weight: bold; text-align: center; }
-#equation, #r2_value { color: #DC3545; font-size: 1.1em; }
-.fit-result { min-height: 50px; }
-.table-container { height: 485px; overflow-y: auto; border: 1px solid #ccc; }
-table { border-collapse: collapse; width: 100%; text-align: center; }
-th, td { border: 1px solid #ddd; padding: 8px; font-size: 0.9em; }
-th { background-color: #f2f2f2; }
-.graph-controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: center; margin-top: 15px;}
-.fit-controls input { width: 80px; }
+/* ========================================
+   공통 스타일 시트 - Arduino Web Lab
+   ======================================== */
 
-/* --- 🔻 핵심 레이아웃 수정 부분 🔻 --- */
+/* 기본 스타일 */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    background-color: #f9f9f9;
+    margin: 0;
+}
+
+.container {
+    background-color: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    width: 95%;
+    max-width: 1600px;
+    margin-bottom: 20px;
+}
+
+/* 프로젝트 목록 */
+.project-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.project-list li {
+    margin: 15px 0;
+}
+
+.project-list a {
+    text-decoration: none;
+    font-size: 1.5em;
+    color: #007BFF;
+    transition: color 0.2s ease;
+}
+
+.project-list a:hover {
+    text-decoration: underline;
+    color: #0056b3;
+}
+
+/* 레이아웃 */
+.main-layout {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.content-column {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 연결 섹션 */
+.connection-section {
+    border: 1px solid #ddd;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.connection-section h3 {
+    margin-top: 0;
+}
+
+/* 버튼 및 입력 그룹 */
+.button-group {
+    margin: 20px 0;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+}
+
+button,
+select,
+input[type="number"] {
+    padding: 10px;
+    font-size: 1em;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+
+button {
+    cursor: pointer;
+    color: white;
+    border: none;
+    transition: background-color 0.3s ease;
+    font-weight: 500;
+}
+
+/* 버튼 색상 */
+.ble-button {
+    background-color: #007BFF;
+}
+
+.sim-button {
+    background-color: #58af5b;
+}
+
+#recordButton {
+    background-color: #28A745;
+}
+
+#downloadButton {
+    background-color: #17A2B8;
+}
+
+#fitButton {
+    background-color: #6f42c1;
+}
+
+#resetZoomButton {
+    background-color: #6c757d;
+}
+
+button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+button:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+/* 상태 및 결과 텍스트 */
+#status,
+#equation {
+    font-weight: bold;
+    text-align: center;
+}
+
+#equation,
+#r2_value {
+    color: #DC3545;
+    font-size: 1.1em;
+}
+
+.fit-result {
+    min-height: 50px;
+}
+
+/* 테이블 */
+.table-container {
+    height: 485px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    text-align: center;
+}
+
+th,
+td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    font-size: 0.9em;
+}
+
+th {
+    background-color: #f2f2f2;
+    font-weight: 600;
+}
+
+/* 그래프 컨트롤 */
+.graph-controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+.fit-controls input {
+    width: 80px;
+}
+
+/* 차트 래퍼 및 슬라이더 */
 .chart-wrapper {
-    position: relative; /* 슬라이더 위치의 기준점이 됨 */
+    position: relative;
     height: 400px;
 }
-.chart-container { width: 100%; height: 100%;}
+
+.chart-container {
+    width: 100%;
+    height: 100%;
+}
+
 #range-slider {
     position: absolute;
-    bottom: 0; /* X축 위치에 근사하게 배치 */
+    bottom: 0;
+    left: 0;
+    right: 0;
     height: 20px;
     background: rgba(230, 230, 230, 0.7);
     border-top: 1px solid #ccc;
+    cursor: pointer;
 }
-/* --- 🔺 핵심 레이아웃 수정 부분 🔺 --- */
 
+/* 시뮬레이션 영역 */
 .simulation-area {
     width: 100%;
-    height: 150px; /* 애니메이션 영역 높이 */
+    height: 150px;
     border: 2px solid #ddd;
     margin-top: 20px;
     margin-bottom: 20px;
     position: relative;
-    overflow: hidden; /* 자동차가 벽에 부딪힐 때 튀어나가지 않도록 */
-    background-color: #e0f2f7; /* 하늘색 배경 */
+    overflow: hidden;
+    background-color: #e0f2f7;
+    border-radius: 5px;
 }
 
+/* 자동차 */
 .car {
     position: absolute;
     width: 50px;
     height: 30px;
-    background-color: #FF6384; /* 빨간색 자동차 */
+    background-color: #FF6384;
     bottom: 10px;
     left: 0;
-    transition: transform 0.05s linear; /* 부드러운 움직임을 위한 전환 효과 */
+    transition: transform 0.05s linear;
     border-radius: 5px;
     display: flex;
     justify-content: center;
@@ -72,15 +245,17 @@ th { background-color: #f2f2f2; }
     font-weight: bold;
 }
 
+/* 벽 */
 .wall {
     position: absolute;
-    width: 10px; /* 벽 두께 */
+    width: 10px;
     height: 100%;
-    background-color: #6c757d; /* 회색 벽 */
+    background-color: #6c757d;
     right: 0;
     top: 0;
 }
 
+/* 폭발 애니메이션 */
 .explosion {
     position: absolute;
     width: 50px;
@@ -90,12 +265,34 @@ th { background-color: #f2f2f2; }
     opacity: 0;
     transform: scale(0.1);
     transition: all 0.2s ease-out;
-    pointer-events: none; /* 클릭 방지 */
-    left: calc(100% - 60px); /* 벽 근처 */
+    pointer-events: none;
+    left: calc(100% - 60px);
     bottom: 0;
 }
 
 .explosion.active {
     opacity: 1;
     transform: scale(1);
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+    .main-layout {
+        flex-direction: column;
+    }
+
+    .project-list a {
+        font-size: 1.2em;
+    }
+
+    .button-group {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    button,
+    select,
+    input[type="number"] {
+        width: 100%;
+    }
 }
