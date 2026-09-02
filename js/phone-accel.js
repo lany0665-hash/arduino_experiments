@@ -25,6 +25,20 @@ const bufferSizeEl = document.getElementById('buffer-size');
 
 bufferSizeEl.innerText = MAX_SAMPLES;
 
+// Timeline canvas setup
+const timelineCanvasEl = document.getElementById('timelineCanvas');
+const timelineCtx = timelineCanvasEl.getContext('2d');
+let timelineWidth = timelineCanvasEl.offsetWidth || 600;
+let timelineHeight = 50;
+
+function resizeTimelineCanvas() {
+    const rect = timelineCanvasEl.getBoundingClientRect();
+    timelineWidth = rect.width || 600;
+    timelineCanvasEl.width = timelineWidth;
+    timelineCanvasEl.height = timelineHeight;
+}
+resizeTimelineCanvas();
+
 // Chart.js 초기화 (x-axis in milliseconds)
 const ctx = document.getElementById('accChart').getContext('2d');
 const accChart = new Chart(ctx, {
@@ -49,12 +63,14 @@ const accChart = new Chart(ctx, {
 function updateTimeRangeDisplay() {
     if (samples.length === 0) {
         timeRangeSpan.innerText = '전체: 0 ms';
+        drawTimeline();
         return;
     }
     const minMs = Math.min(...samples.map(s => s.rel));
     const maxMs = Math.max(...samples.map(s => s.rel));
     const rangeMs = maxMs - minMs;
     timeRangeSpan.innerText = `전체: ${rangeMs.toFixed(0)} ms`;
+    drawTimeline();
 }
 
 function rebuildChartDataFromSamples() {
@@ -216,29 +232,85 @@ function updateSelectionStatus() {
         selectionStatus.style.color = '#27ae60';
         btnCrop.disabled = false;
     }
+    drawTimeline();
 }
 
-// Handle canvas click - select start/end points
-function onChartClick(event) {
-    if (samples.length === 0 || !recording) return;
+function drawTimeline() {
+    resizeTimelineCanvas();
+    const padding = 20;
+    const drawWidth = timelineWidth - 2 * padding;
+    const drawHeight = timelineHeight - 10;
     
-    // Get canvas position relative to click
-    const canvas = accChart.canvas;
-    const rect = canvas.getBoundingClientRect();
+    // Clear
+    timelineCtx.fillStyle = '#f8f9fa';
+    timelineCtx.fillRect(0, 0, timelineWidth, timelineHeight);
+    
+    if (samples.length === 0) return;
+    
+    const minMs = Math.min(...samples.map(s => s.rel));
+    const maxMs = Math.max(...samples.map(s => s.rel));
+    const rangeMs = maxMs - minMs;
+    
+    if (rangeMs === 0) return;
+    
+    // Draw background (data range)
+    timelineCtx.fillStyle = '#e8e8e8';
+    timelineCtx.fillRect(padding, 5, drawWidth, drawHeight);
+    
+    // Draw selection area if exists
+    if (cropStartMs !== null && cropEndMs !== null) {
+        const startPx = padding + ((cropStartMs - minMs) / rangeMs) * drawWidth;
+        const endPx = padding + ((cropEndMs - minMs) / rangeMs) * drawWidth;
+        timelineCtx.fillStyle = 'rgba(39, 174, 96, 0.3)';
+        timelineCtx.fillRect(startPx, 5, endPx - startPx, drawHeight);
+    }
+    
+    // Draw start line if selected
+    if (cropStartMs !== null) {
+        const startPx = padding + ((cropStartMs - minMs) / rangeMs) * drawWidth;
+        timelineCtx.strokeStyle = '#e74c3c';
+        timelineCtx.lineWidth = 2;
+        timelineCtx.beginPath();
+        timelineCtx.moveTo(startPx, 5);
+        timelineCtx.lineTo(startPx, timelineHeight - 5);
+        timelineCtx.stroke();
+    }
+    
+    // Draw end line if selected
+    if (cropEndMs !== null) {
+        const endPx = padding + ((cropEndMs - minMs) / rangeMs) * drawWidth;
+        timelineCtx.strokeStyle = '#27ae60';
+        timelineCtx.lineWidth = 2;
+        timelineCtx.beginPath();
+        timelineCtx.moveTo(endPx, 5);
+        timelineCtx.lineTo(endPx, timelineHeight - 5);
+        timelineCtx.stroke();
+    }
+    
+    // Draw border
+    timelineCtx.strokeStyle = '#ddd';
+    timelineCtx.lineWidth = 1;
+    timelineCtx.strokeRect(padding, 5, drawWidth, drawHeight);
+}
+
+// Handle timeline click
+function onTimelineClick(event) {
+    if (samples.length === 0) return;
+    
+    const rect = timelineCanvasEl.getBoundingClientRect();
     const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    const padding = 20;
+    const drawWidth = timelineWidth - 2 * padding;
     
-    // Get scale info from chart
-    const xScale = accChart.scales.x;
-    const yScale = accChart.scales.y;
+    if (x < padding || x > padding + drawWidth) return;
     
-    if (!xScale || !yScale) return;
+    const minMs = Math.min(...samples.map(s => s.rel));
+    const maxMs = Math.max(...samples.map(s => s.rel));
+    const rangeMs = maxMs - minMs;
     
-    // Convert pixel coordinates to data coordinates
-    const chartX = xScale.getValueForPixel(x);
+    if (rangeMs === 0) return;
     
-    // Round to nearest millisecond
-    const timeMs = Math.round(chartX);
+    const timeMs = minMs + ((x - padding) / drawWidth) * rangeMs;
     
     if (selectionMode === 0) {
         // First click: set start
@@ -269,8 +341,8 @@ btnDownload.addEventListener('click', downloadCSV);
 btnCrop.addEventListener('click', cropToSelection);
 btnResetData.addEventListener('click', resetDataToOriginal);
 
-// Canvas click for selection
-document.getElementById('accChart').addEventListener('click', onChartClick);
+// Timeline click for selection
+timelineCanvasEl.addEventListener('click', onTimelineClick);
 
 // Initialize empty chart data arrays
 (function initChartBuffer(){
