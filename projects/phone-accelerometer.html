@@ -27,11 +27,23 @@
             <button id="btn-start">시작</button>
             <button id="btn-stop" disabled>중지</button>
             <button id="btn-download" disabled>CSV 다운로드</button>
-            <button id="btn-crop" disabled>선택 영역 크롭</button>
-            <button id="btn-reset-data" disabled>데이터 리셋</button>
             <label style="margin-left:auto">샘플 버퍼: <span id="buffer-size">100</span></label>
         </div>
-        <div class="notice">그래프에서 마우스/터치로 드래그해 영역을 선택한 뒤 '선택 영역 크롭'을 눌러 해당 구간만 남길 수 있습니다.</div>
+
+        <div style="background:#f1f3f5; padding:10px; border-radius:6px; margin:10px 0;">
+            <h3>시간 구간 선택 (ms)</h3>
+            <div class="controls">
+                <div>
+                    <label>시작 시간 (ms): <input type="number" id="crop-start" min="0" value="0" style="width:100px;"></label>
+                </div>
+                <div>
+                    <label>종료 시간 (ms): <input type="number" id="crop-end" min="0" value="0" style="width:100px;"></label>
+                </div>
+                <span id="time-range" style="margin-left:10px; font-weight:bold;">전체: 0 ms</span>
+                <button id="btn-crop" disabled style="margin-left:auto;">선택 구간 크롭</button>
+                <button id="btn-reset-data" disabled>데이터 리셋</button>
+            </div>
+        </div>
 
         <div id="acc-values">
             <div class="acc-box">Ax: <span id="ax">0.00</span> g</div>
