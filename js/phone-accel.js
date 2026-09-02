@@ -5,6 +5,9 @@ let recording = false;
 let samples = [];       // {t: absolute unix time, rel: ms from session start, ax, ay, az}
 let originalSamples = null;
 let sessionStart = null;
+let selectionMode = 0;  // 0: waiting, 1: start selected, 2: both selected
+let cropStartMs = null;
+let cropEndMs = null;
 const MAX_SAMPLES = 200; // buffer size
 
 const btnStart = document.getElementById('btn-start');
@@ -12,8 +15,7 @@ const btnStop = document.getElementById('btn-stop');
 const btnDownload = document.getElementById('btn-download');
 const btnCrop = document.getElementById('btn-crop');
 const btnResetData = document.getElementById('btn-reset-data');
-const cropStartInput = document.getElementById('crop-start');
-const cropEndInput = document.getElementById('crop-end');
+const selectionStatus = document.getElementById('selection-status');
 const timeRangeSpan = document.getElementById('time-range');
 const axEl = document.getElementById('ax');
 const ayEl = document.getElementById('ay');
@@ -47,21 +49,12 @@ const accChart = new Chart(ctx, {
 function updateTimeRangeDisplay() {
     if (samples.length === 0) {
         timeRangeSpan.innerText = '전체: 0 ms';
-        cropStartInput.max = 0;
-        cropEndInput.max = 0;
-        cropStartInput.value = 0;
-        cropEndInput.value = 0;
         return;
     }
     const minMs = Math.min(...samples.map(s => s.rel));
     const maxMs = Math.max(...samples.map(s => s.rel));
     const rangeMs = maxMs - minMs;
     timeRangeSpan.innerText = `전체: ${rangeMs.toFixed(0)} ms`;
-    
-    cropStartInput.max = Math.round(maxMs);
-    cropEndInput.max = Math.round(maxMs);
-    if (cropStartInput.value === '' || parseInt(cropStartInput.value) > maxMs) cropStartInput.value = Math.round(minMs);
-    if (cropEndInput.value === '' || parseInt(cropEndInput.value) > maxMs) cropEndInput.value = Math.round(maxMs);
 }
 
 function rebuildChartDataFromSamples() {
@@ -131,6 +124,9 @@ async function startRecording() {
     sessionStart = null;
     samples = [];
     originalSamples = null;
+    selectionMode = 0;
+    cropStartMs = null;
+    cropEndMs = null;
     accChart.data.datasets.forEach(ds => ds.data = []);
     accChart.update();
 
@@ -140,6 +136,7 @@ async function startRecording() {
     btnCrop.disabled = true; btnResetData.disabled = true;
     
     updateTimeRangeDisplay();
+    updateSelectionStatus();
 }
 
 function stopRecording() {
@@ -163,26 +160,33 @@ function downloadCSV() {
     document.body.removeChild(link);
 }
 
-// Crop to selected timeline range (ms inputs)
+// Crop to selected timeline range (graph click selection)
 function cropToSelection() {
-    const startMs = parseFloat(cropStartInput.value) || 0;
-    const endMs = parseFloat(cropEndInput.value) || 0;
+    if (cropStartMs === null || cropEndMs === null) {
+        return alert('시작 지점과 종료 지점을 모두 선택하세요.');
+    }
 
-    if (isNaN(startMs) || isNaN(endMs) || startMs >= endMs) {
-        return alert('유효한 시간 범위를 입력하세요. (시작 < 종료)');
+    if (cropStartMs >= cropEndMs) {
+        return alert('유효한 시간 범위를 선택하세요. (시작 < 종료)');
     }
 
     // Ensure originalSamples saved for reset
     if (!originalSamples) originalSamples = samples.slice();
 
-    // filter samples by rel time between startMs and endMs
-    const filtered = originalSamples.filter(s => s.rel >= startMs && s.rel <= endMs);
+    // filter samples by rel time between cropStartMs and cropEndMs
+    const filtered = originalSamples.filter(s => s.rel >= cropStartMs && s.rel <= cropEndMs);
     if (filtered.length === 0) return alert('선택된 구간에 데이터가 없습니다.');
 
     samples = filtered;
     // rebuild chart data
     rebuildChartDataFromSamples();
     accChart.update();
+    
+    // Reset selection
+    selectionMode = 0;
+    cropStartMs = null;
+    cropEndMs = null;
+    updateSelectionStatus();
 }
 
 function resetDataToOriginal() {
@@ -190,6 +194,72 @@ function resetDataToOriginal() {
     samples = originalSamples.slice();
     rebuildChartDataFromSamples();
     accChart.update();
+    
+    // Reset selection
+    selectionMode = 0;
+    cropStartMs = null;
+    cropEndMs = null;
+    updateSelectionStatus();
+}
+
+function updateSelectionStatus() {
+    if (selectionMode === 0) {
+        selectionStatus.innerText = '준비됨';
+        selectionStatus.style.color = '#666';
+        btnCrop.disabled = true;
+    } else if (selectionMode === 1) {
+        selectionStatus.innerText = `시작 지점 선택됨 (${cropStartMs.toFixed(0)} ms)`;
+        selectionStatus.style.color = '#e74c3c';
+        btnCrop.disabled = true;
+    } else if (selectionMode === 2) {
+        selectionStatus.innerText = `구간 선택됨: ${cropStartMs.toFixed(0)}~${cropEndMs.toFixed(0)} ms`;
+        selectionStatus.style.color = '#27ae60';
+        btnCrop.disabled = false;
+    }
+}
+
+// Handle canvas click - select start/end points
+function onChartClick(event) {
+    if (samples.length === 0 || !recording) return;
+    
+    // Get canvas position relative to click
+    const canvas = accChart.canvas;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    // Get scale info from chart
+    const xScale = accChart.scales.x;
+    const yScale = accChart.scales.y;
+    
+    if (!xScale || !yScale) return;
+    
+    // Convert pixel coordinates to data coordinates
+    const chartX = xScale.getValueForPixel(x);
+    
+    // Round to nearest millisecond
+    const timeMs = Math.round(chartX);
+    
+    if (selectionMode === 0) {
+        // First click: set start
+        cropStartMs = timeMs;
+        selectionMode = 1;
+    } else if (selectionMode === 1) {
+        // Second click: set end
+        if (timeMs <= cropStartMs) {
+            alert('종료 지점이 시작 지점보다 뒤에 와야 합니다.');
+            return;
+        }
+        cropEndMs = timeMs;
+        selectionMode = 2;
+    } else if (selectionMode === 2) {
+        // Third click: reset and start over
+        selectionMode = 0;
+        cropStartMs = null;
+        cropEndMs = null;
+    }
+    
+    updateSelectionStatus();
 }
 
 // Button wiring
@@ -199,9 +269,13 @@ btnDownload.addEventListener('click', downloadCSV);
 btnCrop.addEventListener('click', cropToSelection);
 btnResetData.addEventListener('click', resetDataToOriginal);
 
+// Canvas click for selection
+document.getElementById('accChart').addEventListener('click', onChartClick);
+
 // Initialize empty chart data arrays
 (function initChartBuffer(){
     accChart.data.datasets.forEach(ds => { ds.data = []; });
     accChart.update();
     updateTimeRangeDisplay();
+    updateSelectionStatus();
 })();

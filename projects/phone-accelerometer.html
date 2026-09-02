@@ -31,14 +31,12 @@
         </div>
 
         <div style="background:#f1f3f5; padding:10px; border-radius:6px; margin:10px 0;">
-            <h3>시간 구간 선택 (ms)</h3>
+            <h3>구간 선택</h3>
+            <p style="font-size:0.9em; color:#555; margin:8px 0;">
+                그래프를 클릭해서 <strong style="color:#e74c3c;">시작 지점</strong>을 선택한 후, <strong style="color:#2ecc71;">종료 지점</strong>을 선택하세요.
+            </p>
             <div class="controls">
-                <div>
-                    <label>시작 시간 (ms): <input type="number" id="crop-start" min="0" value="0" style="width:100px;"></label>
-                </div>
-                <div>
-                    <label>종료 시간 (ms): <input type="number" id="crop-end" min="0" value="0" style="width:100px;"></label>
-                </div>
+                <span id="selection-status" style="font-weight:bold; color:#666;">준비됨</span>
                 <span id="time-range" style="margin-left:10px; font-weight:bold;">전체: 0 ms</span>
                 <button id="btn-crop" disabled style="margin-left:auto;">선택 구간 크롭</button>
                 <button id="btn-reset-data" disabled>데이터 리셋</button>
