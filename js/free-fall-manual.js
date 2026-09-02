@@ -1,11 +1,15 @@
 /* ========================================
-   자유낙하 궤적 분석 - 수동 선택 방식
+   자유낙하 및 2차원 운동 분석
+   - 탭 기능 (자유낙하 / 2차원 운동)
+   - 모바일 터치 확대 선택
+   - 픽셀-실제 길이 보정
    ======================================== */
 
 const fileInput = document.getElementById('video-upload');
 const fpsInput = document.getElementById('fps-input');
 const stepSlider = document.getElementById('step-slider');
 const stepVal = document.getElementById('step-val');
+const pixelToMmInput = document.getElementById('pixel-to-mm');
 
 const btnExtract = document.getElementById('btn-extract');
 const btnManualTrack = document.getElementById('btn-manual-track');
@@ -37,6 +41,10 @@ const canvasStrobo = document.getElementById('canvas-strobo');
 const ctxStrobo = canvasStrobo.getContext('2d', { willReadFrequently: true });
 const chartWrapper = document.getElementById('chart-wrapper');
 
+const zoomOverlay = document.getElementById('zoom-overlay');
+const zoomCanvas = document.getElementById('zoom-canvas');
+const zoomCtx = zoomCanvas.getContext('2d', { willReadFrequently: true });
+
 let frames = [];
 let dataPoints = [];
 let chartInstance = null;
@@ -45,9 +53,24 @@ let frameInterval = 1 / fps;
 let extractionTime = 0;
 let currentFrameIndex = 0;
 let isSelectingMode = false;
+let currentAnalysisMode = 'free-fall';
 
 const MAX_DIMENSION = 800;
 const MAX_FRAMES = 150;
+const ZOOM_RADIUS = 110;
+const ZOOM_SCALE = 3;
+
+/* ========================================
+   탭 전환
+   ======================================== */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        currentAnalysisMode = e.target.dataset.tab;
+        console.log('Switched to mode:', currentAnalysisMode);
+    });
+});
 
 /* ========================================
    단계 1: 영상 로드 및 프레임 추출
@@ -146,15 +169,12 @@ function displayFrame(index) {
     frameInput.value = index + 1;
 
     ctx.putImageData(frames[index].img, 0, 0);
-
-    // 이미 선택된 점이 있으면 표시
     drawSelectedPoint(index);
 }
 
 function drawSelectedPoint(frameIndex) {
     const dp = dataPoints.find(d => d.frameIndex === frameIndex);
     if (dp) {
-        // 선택된 점 표시
         ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
         ctx.beginPath();
         ctx.arc(dp.x, dp.y, 8, 0, 2 * Math.PI);
@@ -197,50 +217,97 @@ btnManualTrack.addEventListener('click', () => {
     btnStrobo.style.display = 'inline-block';
 
     displayFrame(0);
-    statusMsg.innerText = "3단계: 캔버스 위의 물체 중심을 클릭하세요. 프레임 네비게이션을 사용하여 다음 선택 위치로 이동하세요.";
+    statusMsg.innerText = "3단계: 캔버스 위의 물체 중심을 클릭하세요. 모바일에서는 길게 눌러 확대 선택이 가능합니다.";
 });
 
 /* ========================================
-   제스처 및 터치 이벤트 - 스와이프
+   터치 확대 선택 (모바일 정확도 향상)
    ======================================== */
 
-let touchStartX = 0;
-let touchStartY = 0;
+let touchStartTime = 0;
+let isLongPress = false;
+let zoomX = 0;
+let zoomY = 0;
 
 canvas.addEventListener('touchstart', (event) => {
     if (!isSelectingMode) return;
-    touchStartX = event.touches[0].clientX;
-    touchStartY = event.touches[0].clientY;
+    touchStartTime = Date.now();
+    isLongPress = false;
+    const { x, y } = getCanvasCoordinates(event);
+    zoomX = x;
+    zoomY = y;
 }, false);
 
 canvas.addEventListener('touchmove', (event) => {
-    // 스와이프 중 기본 동작 방지 (스크롤 방지)
+    if (!isSelectingMode || Date.now() - touchStartTime < 500) return;
+    if (!isLongPress) {
+        isLongPress = true;
+        showZoomOverlay(zoomX, zoomY);
+    }
+    const { x, y } = getCanvasCoordinates(event);
+    updateZoomOverlay(x, y);
     event.preventDefault();
 }, false);
 
 canvas.addEventListener('touchend', (event) => {
     if (!isSelectingMode) return;
     
-    const touchEndX = event.changedTouches[0].clientX;
-    const touchEndY = event.changedTouches[0].clientY;
-    const deltaX = touchEndX - touchStartX;
-    const deltaY = touchEndY - touchStartY;
-    
-    // 수평 스와이프 감지 (세로보다 가로 이동이 더 많음)
-    // 최소 30px 이상의 스와이프만 감지
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 30) {
-        if (deltaX > 0) {
-            // 오른쪽으로 스와이프 → 다음 프레임
-            displayFrame(currentFrameIndex + 1);
-        } else {
-            // 왼쪽으로 스와이프 → 이전 프레임
-            displayFrame(currentFrameIndex - 1);
+    if (isLongPress) {
+        const { x, y } = getCanvasCoordinates(event.changedTouches[0]);
+        addDataPoint(x, y);
+    } else {
+        const touchEndX = event.changedTouches[0].clientX;
+        const touchEndY = event.changedTouches[0].clientY;
+        const deltaX = touchEndX - (event.touches[0]?.clientX || touchEndX);
+        const deltaY = touchEndY - (event.touches[0]?.clientY || touchEndY);
+        
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 30) {
+            if (deltaX > 0) {
+                displayFrame(currentFrameIndex + 1);
+            } else {
+                displayFrame(currentFrameIndex - 1);
+            }
+        } else if (Math.abs(deltaX) <= 10 && Math.abs(deltaY) <= 10) {
+            addDataPoint(zoomX, zoomY);
         }
     }
+    
+    zoomOverlay.style.display = 'none';
+    isLongPress = false;
 }, false);
 
+function showZoomOverlay(x, y) {
+    zoomOverlay.style.display = 'block';
+    updateZoomOverlay(x, y);
+}
+
+function updateZoomOverlay(x, y) {
+    zoomX = x;
+    zoomY = y;
+    
+    const left = Math.min(x / canvas.width * 100, 85);
+    zoomOverlay.style.left = left + '%';
+    
+    const sourceCanvas = canvas;
+    const sourceX = Math.max(0, Math.min(x - ZOOM_RADIUS / ZOOM_SCALE, sourceCanvas.width - ZOOM_RADIUS / ZOOM_SCALE * 2));
+    const sourceY = Math.max(0, Math.min(y - ZOOM_RADIUS / ZOOM_SCALE, sourceCanvas.height - ZOOM_RADIUS / ZOOM_SCALE * 2));
+    
+    zoomCtx.clearRect(0, 0, zoomCanvas.width, zoomCanvas.height);
+    zoomCtx.drawImage(
+        sourceCanvas,
+        sourceX, sourceY, ZOOM_RADIUS / ZOOM_SCALE * 2, ZOOM_RADIUS / ZOOM_SCALE * 2,
+        0, 0, zoomCanvas.width, zoomCanvas.height
+    );
+    
+    zoomCtx.strokeStyle = '#f00';
+    zoomCtx.lineWidth = 2;
+    zoomCtx.beginPath();
+    zoomCtx.arc(ZOOM_RADIUS, ZOOM_RADIUS, 6, 0, 2 * Math.PI);
+    zoomCtx.stroke();
+}
+
 /* ========================================
-   마우스 및 터치 - 클릭/탭으로 점 선택 + 드래그 스와이프
+   마우스 및 클릭
    ======================================== */
 
 let mouseDownX = 0;
@@ -255,7 +322,6 @@ canvas.addEventListener('mousedown', (event) => {
 });
 
 canvas.addEventListener('mousemove', (event) => {
-    // 드래그 중에는 기본 선택 동작 방지
     if (isMouseDown) {
         event.preventDefault();
     }
@@ -270,47 +336,20 @@ canvas.addEventListener('mouseup', (event) => {
     const deltaX = mouseUpX - mouseDownX;
     const deltaY = mouseUpY - mouseDownY;
     
-    // 충분한 거리의 드래그가 감지되면 스와이프로 처리
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 40) {
         if (deltaX > 0) {
-            // 오른쪽으로 드래그 → 다음 프레임
             displayFrame(currentFrameIndex + 1);
         } else {
-            // 왼쪽으로 드래그 → 이전 프레임
             displayFrame(currentFrameIndex - 1);
         }
     } else if (Math.abs(deltaX) <= 10 && Math.abs(deltaY) <= 10) {
-        // 거의 움직이지 않으면 클릭으로 취급 (점 선택)
         const { x, y } = getCanvasCoordinates(event);
-
-        // 이미 이 프레임에서 선택했다면 기존 점 제거
-        const existingIndex = dataPoints.findIndex(d => d.frameIndex === currentFrameIndex);
-        if (existingIndex >= 0) {
-            dataPoints.splice(existingIndex, 1);
-        }
-
-        // 새로운 점 추가
-        dataPoints.push({
-            time: frames[currentFrameIndex].time,
-            x: x,
-            y: y,
-            frameIndex: currentFrameIndex
-        });
-
-        selectedCount.innerText = dataPoints.length;
-        displayFrame(currentFrameIndex);
-
-        // 자동으로 다음 프레임으로 이동 (선택적)
-        if (currentFrameIndex < frames.length - 1) {
-            setTimeout(() => displayFrame(currentFrameIndex + 1), 300);
-        }
+        addDataPoint(x, y);
     }
 });
 
 function getCanvasCoordinates(event) {
     const rect = canvas.getBoundingClientRect();
-    
-    // devicePixelRatio를 고려한 정확한 스케일 계산
     const canvasDisplayWidth = rect.width;
     const canvasDisplayHeight = rect.height;
     const canvasActualWidth = canvas.width;
@@ -332,6 +371,29 @@ function getCanvasCoordinates(event) {
     const y = (clientY - rect.top) * scaleY;
     
     return { x, y };
+}
+
+function addDataPoint(x, y) {
+    const existingIndex = dataPoints.findIndex(d => d.frameIndex === currentFrameIndex);
+    if (existingIndex >= 0) {
+        dataPoints.splice(existingIndex, 1);
+    }
+
+    dataPoints.push({
+        time: frames[currentFrameIndex].time,
+        x: x,
+        y: y,
+        frameIndex: currentFrameIndex,
+        realX: x * parseFloat(pixelToMmInput.value),
+        realY: y * parseFloat(pixelToMmInput.value)
+    });
+
+    selectedCount.innerText = dataPoints.length;
+    displayFrame(currentFrameIndex);
+
+    if (currentFrameIndex < frames.length - 1) {
+        setTimeout(() => displayFrame(currentFrameIndex + 1), 300);
+    }
 }
 
 btnUndoPoint.addEventListener('click', () => {
@@ -361,8 +423,6 @@ btnStrobo.addEventListener('click', () => {
     }
 
     const step = parseInt(stepSlider.value);
-
-    // 1. 다중섬광사진 합성
     stroboContainer.style.display = 'block';
 
     const offCanvas = document.createElement('canvas');
@@ -370,11 +430,9 @@ btnStrobo.addEventListener('click', () => {
     offCanvas.height = canvas.height;
     const offCtx = offCanvas.getContext('2d');
 
-    // 첫 프레임(배경) 그리기
     ctxStrobo.putImageData(frames[0].img, 0, 0);
     ctxStrobo.globalCompositeOperation = 'darken';
 
-    // 슬라이더 간격(step)에 맞춰 프레임 겹치기
     for (let i = step; i < frames.length; i += step) {
         offCtx.putImageData(frames[i].img, 0, 0);
         ctxStrobo.drawImage(offCanvas, 0, 0);
@@ -382,7 +440,6 @@ btnStrobo.addEventListener('click', () => {
 
     ctxStrobo.globalCompositeOperation = 'source-over';
 
-    // 2. 선택된 포인트와 궤적 표시
     if (dataPoints.length > 0) {
         const startTime = frames[0].time;
         let prevPoint = null;
@@ -390,20 +447,17 @@ btnStrobo.addEventListener('click', () => {
         for (let i = 0; i < dataPoints.length; i++) {
             const dp = dataPoints[i];
 
-            // 원 표시
             ctxStrobo.fillStyle = 'red';
             ctxStrobo.beginPath();
             ctxStrobo.arc(dp.x, dp.y, 5, 0, 2 * Math.PI);
             ctxStrobo.fill();
 
-            // 외곽선
             ctxStrobo.strokeStyle = 'yellow';
             ctxStrobo.lineWidth = 2;
             ctxStrobo.beginPath();
             ctxStrobo.arc(dp.x, dp.y, 5, 0, 2 * Math.PI);
             ctxStrobo.stroke();
 
-            // 타임스탬프
             const timeText = (dp.time - startTime).toFixed(3) + 's';
             ctxStrobo.font = "bold 14px 'Segoe UI', Arial, sans-serif";
             ctxStrobo.fillStyle = "yellow";
@@ -419,7 +473,6 @@ btnStrobo.addEventListener('click', () => {
             ctxStrobo.shadowOffsetX = 0;
             ctxStrobo.shadowOffsetY = 0;
 
-            // 선 긋기
             if (prevPoint) {
                 ctxStrobo.strokeStyle = 'rgba(255, 0, 0, 0.5)';
                 ctxStrobo.lineWidth = 2;
@@ -452,9 +505,11 @@ function drawGraph() {
     if (dataPoints.length === 0) return;
 
     const startTime = frames[0].time;
+    const pixelToMm = parseFloat(pixelToMmInput.value);
+    
     const scatterData = dataPoints.map(dp => ({
         x: (dp.time - startTime).toFixed(4),
-        y: dp.y.toFixed(1)
+        y: (dp.y * pixelToMm).toFixed(2)
     }));
 
     if (chartInstance) chartInstance.destroy();
@@ -462,7 +517,7 @@ function drawGraph() {
         type: 'scatter',
         data: {
             datasets: [{
-                label: '선택된 Y좌표 (Pixel)',
+                label: currentAnalysisMode === 'free-fall' ? '낙하 거리 (mm)' : '궤적 (mm)',
                 data: scatterData,
                 backgroundColor: 'red',
                 borderColor: 'red',
@@ -485,10 +540,10 @@ function drawGraph() {
                     }
                 },
                 y: {
-                    reverse: true,
+                    reverse: currentAnalysisMode === 'free-fall',
                     title: {
                         display: true,
-                        text: '낙하 거리 Y (Pixel)',
+                        text: currentAnalysisMode === 'free-fall' ? '낙하 거리 (mm)' : 'Y 위치 (mm)',
                         font: { size: 14 }
                     }
                 }
@@ -507,13 +562,14 @@ btnDownloadStrobo.addEventListener('click', () => {
 btnCsv.addEventListener('click', () => {
     if (dataPoints.length === 0) return;
     const startTime = frames[0].time;
-    let csvContent = "data:text/csv;charset=utf-8,Time (s),X Position (px),Y Position (px)\n";
+    const pixelToMm = parseFloat(pixelToMmInput.value);
+    let csvContent = "data:text/csv;charset=utf-8,Time (s),X Position (mm),Y Position (mm)\n";
     dataPoints.forEach(row => {
-        csvContent += `${(row.time - startTime).toFixed(4)},${row.x.toFixed(1)},${row.y.toFixed(1)}\n`;
+        csvContent += `${(row.time - startTime).toFixed(4)},${(row.x * pixelToMm).toFixed(2)},${(row.y * pixelToMm).toFixed(2)}\n`;
     });
     const link = document.createElement("a");
     link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", "free_fall_analysis.csv");
+    link.setAttribute("download", `${currentAnalysisMode}_analysis.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
