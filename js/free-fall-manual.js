@@ -68,6 +68,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
         currentAnalysisMode = e.target.dataset.tab;
+        
+        const chartTitle = document.getElementById('chart-title');
+        if (currentAnalysisMode === 'free-fall') {
+            chartTitle.innerText = '자유낙하 t-y 그래프';
+        } else {
+            chartTitle.innerText = '2차원 운동 궤적 (X-Y 그래프)';
+        }
         console.log('Switched to mode:', currentAnalysisMode);
     });
 });
@@ -507,49 +514,97 @@ function drawGraph() {
     const startTime = frames[0].time;
     const pixelToMm = parseFloat(pixelToMmInput.value);
     
-    const scatterData = dataPoints.map(dp => ({
-        x: (dp.time - startTime).toFixed(4),
-        y: (dp.y * pixelToMm).toFixed(2)
-    }));
+    if (currentAnalysisMode === 'free-fall') {
+        // 자유낙하: 시간 vs Y 좌표
+        const scatterData = dataPoints.map(dp => ({
+            x: (dp.time - startTime).toFixed(4),
+            y: (dp.y * pixelToMm).toFixed(2)
+        }));
 
-    if (chartInstance) chartInstance.destroy();
-    chartInstance = new Chart(ctxChart, {
-        type: 'scatter',
-        data: {
-            datasets: [{
-                label: currentAnalysisMode === 'free-fall' ? '낙하 거리 (mm)' : '궤적 (mm)',
-                data: scatterData,
-                backgroundColor: 'red',
-                borderColor: 'red',
-                showLine: true,
-                fill: false,
-                tension: 0.3,
-                pointRadius: 6
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                x: {
-                    type: 'linear',
-                    position: 'bottom',
-                    title: {
-                        display: true,
-                        text: '경과 시간 (초)',
-                        font: { size: 14 }
-                    }
-                },
-                y: {
-                    reverse: currentAnalysisMode === 'free-fall',
-                    title: {
-                        display: true,
-                        text: currentAnalysisMode === 'free-fall' ? '낙하 거리 (mm)' : 'Y 위치 (mm)',
-                        font: { size: 14 }
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctxChart, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: '낙하 거리 (mm)',
+                    data: scatterData,
+                    backgroundColor: 'red',
+                    borderColor: 'red',
+                    showLine: true,
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom',
+                        title: {
+                            display: true,
+                            text: '경과 시간 (초)',
+                            font: { size: 14 }
+                        }
+                    },
+                    y: {
+                        reverse: true,
+                        title: {
+                            display: true,
+                            text: '낙하 거리 (mm)',
+                            font: { size: 14 }
+                        }
                     }
                 }
             }
-        }
-    });
+        });
+    } else {
+        // 2차원 운동: X vs Y 궤적 (Position graph)
+        const trajectoryData = dataPoints.map(dp => ({
+            x: (dp.x * pixelToMm).toFixed(2),
+            y: (dp.y * pixelToMm).toFixed(2)
+        }));
+
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctxChart, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: '물체 궤적',
+                    data: trajectoryData,
+                    backgroundColor: 'blue',
+                    borderColor: 'blue',
+                    showLine: true,
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom',
+                        title: {
+                            display: true,
+                            text: 'X 위치 (mm)',
+                            font: { size: 14 }
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Y 위치 (mm)',
+                            font: { size: 14 }
+                        }
+                    }
+                },
+                aspectRatio: 1.2
+            }
+        });
+    }
 }
 
 btnDownloadStrobo.addEventListener('click', () => {
@@ -563,16 +618,31 @@ btnCsv.addEventListener('click', () => {
     if (dataPoints.length === 0) return;
     const startTime = frames[0].time;
     const pixelToMm = parseFloat(pixelToMmInput.value);
-    let csvContent = "data:text/csv;charset=utf-8,Time (s),X Position (mm),Y Position (mm)\n";
-    dataPoints.forEach(row => {
-        csvContent += `${(row.time - startTime).toFixed(4)},${(row.x * pixelToMm).toFixed(2)},${(row.y * pixelToMm).toFixed(2)}\n`;
-    });
-    const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `${currentAnalysisMode}_analysis.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    
+    if (currentAnalysisMode === 'free-fall') {
+        let csvContent = "data:text/csv;charset=utf-8,Time (s),X Position (mm),Y Position (mm)\n";
+        dataPoints.forEach(row => {
+            csvContent += `${(row.time - startTime).toFixed(4)},${(row.x * pixelToMm).toFixed(2)},${(row.y * pixelToMm).toFixed(2)}\n`;
+        });
+        const link = document.createElement("a");
+        link.setAttribute("href", encodeURI(csvContent));
+        link.setAttribute("download", "free_fall_analysis.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } else {
+        // 2차원 운동: 시간, X, Y 위치 포함
+        let csvContent = "data:text/csv;charset=utf-8,Time (s),X Position (mm),Y Position (mm)\n";
+        dataPoints.forEach(row => {
+            csvContent += `${(row.time - startTime).toFixed(4)},${(row.x * pixelToMm).toFixed(2)},${(row.y * pixelToMm).toFixed(2)}\n`;
+        });
+        const link = document.createElement("a");
+        link.setAttribute("href", encodeURI(csvContent));
+        link.setAttribute("download", "projectile_motion_analysis.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 });
 
 btnReset.addEventListener('click', () => { location.reload(); });
