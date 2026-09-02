@@ -1,8 +1,8 @@
 ﻿// phone-accel.js (updated)
-// 실시간 가속도 표시, 그래프 두께 조정 및 영역 크롭 기능 추가
+// 실시간 가속도 표시, 타임라인 선택 크롭 기능 (ms 단위)
 
 let recording = false;
-let samples = [];       // {t: absolute, rel: seconds from session start, ax, ay, az}
+let samples = [];       // {t: absolute unix time, rel: ms from session start, ax, ay, az}
 let originalSamples = null;
 let sessionStart = null;
 const MAX_SAMPLES = 200; // buffer size
@@ -12,6 +12,9 @@ const btnStop = document.getElementById('btn-stop');
 const btnDownload = document.getElementById('btn-download');
 const btnCrop = document.getElementById('btn-crop');
 const btnResetData = document.getElementById('btn-reset-data');
+const cropStartInput = document.getElementById('crop-start');
+const cropEndInput = document.getElementById('crop-end');
+const timeRangeSpan = document.getElementById('time-range');
 const axEl = document.getElementById('ax');
 const ayEl = document.getElementById('ay');
 const azEl = document.getElementById('az');
@@ -20,7 +23,7 @@ const bufferSizeEl = document.getElementById('buffer-size');
 
 bufferSizeEl.innerText = MAX_SAMPLES;
 
-// Chart.js 초기화 (datasets use {x:time, y:value} for linear x-axis)
+// Chart.js 초기화 (x-axis in milliseconds)
 const ctx = document.getElementById('accChart').getContext('2d');
 const accChart = new Chart(ctx, {
     type: 'line',
@@ -34,24 +37,39 @@ const accChart = new Chart(ctx, {
     options: {
         animation: false,
         responsive: true,
-        plugins: {
-            zoom: {
-                pan: { enabled: true, mode: 'x' },
-                zoom: { drag: { enabled: true }, mode: 'x' }
-            }
-        },
         scales: {
-            x: { type: 'linear', title: { display: true, text: 'time (s)'} },
+            x: { type: 'linear', title: { display: true, text: 'time (ms)'} },
             y: { suggestedMin: -2, suggestedMax: 2, title: { display: true, text: 'g' } }
         }
     }
 });
 
+function updateTimeRangeDisplay() {
+    if (samples.length === 0) {
+        timeRangeSpan.innerText = '전체: 0 ms';
+        cropStartInput.max = 0;
+        cropEndInput.max = 0;
+        cropStartInput.value = 0;
+        cropEndInput.value = 0;
+        return;
+    }
+    const minMs = Math.min(...samples.map(s => s.rel));
+    const maxMs = Math.max(...samples.map(s => s.rel));
+    const rangeMs = maxMs - minMs;
+    timeRangeSpan.innerText = `전체: ${rangeMs.toFixed(0)} ms`;
+    
+    cropStartInput.max = Math.round(maxMs);
+    cropEndInput.max = Math.round(maxMs);
+    if (cropStartInput.value === '' || parseInt(cropStartInput.value) > maxMs) cropStartInput.value = Math.round(minMs);
+    if (cropEndInput.value === '' || parseInt(cropEndInput.value) > maxMs) cropEndInput.value = Math.round(maxMs);
+}
+
 function rebuildChartDataFromSamples() {
-    const ds0 = accChart.data.datasets[0].data = samples.map(s => ({ x: s.rel, y: s.ax }));
-    const ds1 = accChart.data.datasets[1].data = samples.map(s => ({ x: s.rel, y: s.ay }));
-    const ds2 = accChart.data.datasets[2].data = samples.map(s => ({ x: s.rel, y: s.az }));
+    accChart.data.datasets[0].data = samples.map(s => ({ x: s.rel, y: s.ax }));
+    accChart.data.datasets[1].data = samples.map(s => ({ x: s.rel, y: s.ay }));
+    accChart.data.datasets[2].data = samples.map(s => ({ x: s.rel, y: s.az }));
     accChart.update();
+    updateTimeRangeDisplay();
 }
 
 function handleMotion(event) {
@@ -72,16 +90,16 @@ function handleMotion(event) {
 
     if (!recording) return;
 
-    const t = Date.now() / 1000;
+    const t = Date.now(); // unix time in ms
     if (!sessionStart) sessionStart = t;
-    const rel = t - sessionStart;
+    const rel = t - sessionStart; // relative time in ms
     samples.push({ t, rel, ax: gx, ay: gy, az: gz });
     if (samples.length > MAX_SAMPLES) samples.shift();
 
     // Keep originalSamples updated when not cropping
     if (!originalSamples) originalSamples = samples.slice();
 
-    // Update chart datasets (linear x)
+    // Update chart datasets (linear x in ms)
     accChart.data.datasets[0].data.push({ x: rel, y: gx });
     accChart.data.datasets[1].data.push({ x: rel, y: gy });
     accChart.data.datasets[2].data.push({ x: rel, y: gz });
@@ -96,6 +114,8 @@ function handleMotion(event) {
         btnResetData.disabled = false;
         btnDownload.disabled = false;
     }
+    
+    updateTimeRangeDisplay();
 }
 
 async function startRecording() {
@@ -118,6 +138,8 @@ async function startRecording() {
     recording = true;
     btnStart.disabled = true; btnStop.disabled = false; btnDownload.disabled = true; // download enabled after data
     btnCrop.disabled = true; btnResetData.disabled = true;
+    
+    updateTimeRangeDisplay();
 }
 
 function stopRecording() {
@@ -128,10 +150,10 @@ function stopRecording() {
 
 function downloadCSV() {
     if (samples.length === 0) return alert('저장할 데이터가 없습니다');
-    let csv = 'time(s),ax(g),ay(g),az(g)\n';
-    const start = samples[0].t;
+    let csv = 'time(ms),ax(g),ay(g),az(g)\n';
+    const start = samples[0].rel; // start from first sample time in ms
     samples.forEach(s => {
-        csv += `${(s.t-start).toFixed(4)},${s.ax.toFixed(4)},${s.ay.toFixed(4)},${s.az.toFixed(4)}\n`;
+        csv += `${(s.rel-start).toFixed(1)},${s.ax.toFixed(4)},${s.ay.toFixed(4)},${s.az.toFixed(4)}\n`;
     });
     const link = document.createElement('a');
     link.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -141,29 +163,25 @@ function downloadCSV() {
     document.body.removeChild(link);
 }
 
-// Crop to selected chart x-range (requires user to drag/zoom selection using zoom plugin)
+// Crop to selected timeline range (ms inputs)
 function cropToSelection() {
-    // read current visible x range
-    const xScale = accChart.scales.x;
-    if (!xScale) return alert('차트 스케일을 찾을 수 없습니다.');
-    const minX = xScale.min;
-    const maxX = xScale.max;
-    if (minX === undefined || maxX === undefined) return alert('영역을 선택(드래그)한 뒤 시도하세요.');
+    const startMs = parseFloat(cropStartInput.value) || 0;
+    const endMs = parseFloat(cropEndInput.value) || 0;
+
+    if (isNaN(startMs) || isNaN(endMs) || startMs >= endMs) {
+        return alert('유효한 시간 범위를 입력하세요. (시작 < 종료)');
+    }
 
     // Ensure originalSamples saved for reset
     if (!originalSamples) originalSamples = samples.slice();
 
-    const start = originalSamples[0].t; // absolute
-    // filter samples by rel time between minX and maxX
-    const filtered = originalSamples.filter(s => s.rel >= minX && s.rel <= maxX);
-    if (filtered.length === 0) return alert('선택된 영역에 데이터가 없습니다.');
+    // filter samples by rel time between startMs and endMs
+    const filtered = originalSamples.filter(s => s.rel >= startMs && s.rel <= endMs);
+    if (filtered.length === 0) return alert('선택된 구간에 데이터가 없습니다.');
 
     samples = filtered;
     // rebuild chart data
     rebuildChartDataFromSamples();
-
-    // reset chart view to show full cropped data
-    accChart.resetZoom();
     accChart.update();
 }
 
@@ -171,7 +189,7 @@ function resetDataToOriginal() {
     if (!originalSamples) return alert('복원할 원본 데이터가 없습니다.');
     samples = originalSamples.slice();
     rebuildChartDataFromSamples();
-    accChart.resetZoom();
+    accChart.update();
 }
 
 // Button wiring
@@ -185,4 +203,5 @@ btnResetData.addEventListener('click', resetDataToOriginal);
 (function initChartBuffer(){
     accChart.data.datasets.forEach(ds => { ds.data = []; });
     accChart.update();
+    updateTimeRangeDisplay();
 })();
