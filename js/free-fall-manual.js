@@ -516,6 +516,7 @@ function drawGraph() {
     
     if (currentAnalysisMode === 'free-fall') {
         // 자유낙하: 시간 vs Y 좌표
+        document.getElementById('projectile-charts').style.display = 'none';
         const scatterData = dataPoints.map(dp => ({
             x: (dp.time - startTime).toFixed(4),
             y: (dp.y * pixelToMm).toFixed(2)
@@ -560,25 +561,49 @@ function drawGraph() {
             }
         });
     } else {
-        // 2차원 운동: X vs Y 궤적 (Position graph)
-        const trajectoryData = dataPoints.map(dp => ({
-            x: (dp.x * pixelToMm).toFixed(2),
-            y: (dp.y * pixelToMm).toFixed(2)
+        // 2차원 운동: 3개 그래프 표시 (X-t, Y-t, Y-X)
+        document.getElementById('projectile-charts').style.display = 'block';
+        chartWrapper.style.display = 'none';
+        
+        const firstPoint = dataPoints[0];
+        const baseX = firstPoint.x;
+        const baseY = firstPoint.y;
+        
+        // 상대 좌표 계산 (첫 점을 원점으로, 화면 좌표계 반대)
+        const scatterDataXT = dataPoints.map(dp => ({
+            x: (dp.time - startTime).toFixed(4),
+            y: ((dp.x - baseX) * pixelToMm).toFixed(2)
         }));
-
-        if (chartInstance) chartInstance.destroy();
-        chartInstance = new Chart(ctxChart, {
+        
+        const scatterDataYT = dataPoints.map(dp => ({
+            x: (dp.time - startTime).toFixed(4),
+            y: ((baseY - dp.y) * pixelToMm).toFixed(2)  // 위쪽이 +
+        }));
+        
+        const scatterDataYX = dataPoints.map(dp => ({
+            x: ((dp.x - baseX) * pixelToMm).toFixed(2),
+            y: ((baseY - dp.y) * pixelToMm).toFixed(2)
+        }));
+        
+        // 기존 차트 인스턴스 정리
+        if (window.chartXT) window.chartXT.destroy();
+        if (window.chartYT) window.chartYT.destroy();
+        if (window.chartYX) window.chartYX.destroy();
+        
+        // X-T 그래프
+        const ctxXT = document.getElementById('chart-x-t').getContext('2d');
+        window.chartXT = new Chart(ctxXT, {
             type: 'scatter',
             data: {
                 datasets: [{
-                    label: '물체 궤적',
-                    data: trajectoryData,
+                    label: 'X 위치 (mm)',
+                    data: scatterDataXT,
                     backgroundColor: 'blue',
                     borderColor: 'blue',
                     showLine: true,
                     fill: false,
                     tension: 0.3,
-                    pointRadius: 6
+                    pointRadius: 5
                 }]
             },
             options: {
@@ -586,19 +611,70 @@ function drawGraph() {
                 scales: {
                     x: {
                         type: 'linear',
-                        position: 'bottom',
-                        title: {
-                            display: true,
-                            text: 'X 위치 (mm)',
-                            font: { size: 14 }
-                        }
+                        title: { display: true, text: '시간 (초)', font: { size: 12 } }
                     },
                     y: {
-                        title: {
-                            display: true,
-                            text: 'Y 위치 (mm)',
-                            font: { size: 14 }
-                        }
+                        title: { display: true, text: 'X (mm)', font: { size: 12 } }
+                    }
+                }
+            }
+        });
+        
+        // Y-T 그래프
+        const ctxYT = document.getElementById('chart-y-t').getContext('2d');
+        window.chartYT = new Chart(ctxYT, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Y 위치 (mm)',
+                    data: scatterDataYT,
+                    backgroundColor: 'green',
+                    borderColor: 'green',
+                    showLine: true,
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: '시간 (초)', font: { size: 12 } }
+                    },
+                    y: {
+                        title: { display: true, text: 'Y (mm)', font: { size: 12 } }
+                    }
+                }
+            }
+        });
+        
+        // Y-X 궤적 그래프
+        const ctxYX = document.getElementById('chart-y-x').getContext('2d');
+        window.chartYX = new Chart(ctxYX, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: '궤적',
+                    data: scatterDataYX,
+                    backgroundColor: 'red',
+                    borderColor: 'red',
+                    showLine: true,
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'X (mm)', font: { size: 12 } }
+                    },
+                    y: {
+                        title: { display: true, text: 'Y (mm)', font: { size: 12 } }
                     }
                 },
                 aspectRatio: 1.2
@@ -631,10 +707,16 @@ btnCsv.addEventListener('click', () => {
         link.click();
         document.body.removeChild(link);
     } else {
-        // 2차원 운동: 시간, X, Y 위치 포함
+        // 2차원 운동: 첫 점 기준 상대 좌표
+        const firstPoint = dataPoints[0];
+        const baseX = firstPoint.x;
+        const baseY = firstPoint.y;
+        
         let csvContent = "data:text/csv;charset=utf-8,Time (s),X Position (mm),Y Position (mm)\n";
         dataPoints.forEach(row => {
-            csvContent += `${(row.time - startTime).toFixed(4)},${(row.x * pixelToMm).toFixed(2)},${(row.y * pixelToMm).toFixed(2)}\n`;
+            const relX = ((row.x - baseX) * pixelToMm).toFixed(2);
+            const relY = ((baseY - row.y) * pixelToMm).toFixed(2);  // 위쪽이 +
+            csvContent += `${(row.time - startTime).toFixed(4)},${relX},${relY}\n`;
         });
         const link = document.createElement("a");
         link.setAttribute("href", encodeURI(csvContent));
