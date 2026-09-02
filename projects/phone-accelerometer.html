@@ -6,6 +6,7 @@
     <title>스마트폰 가속도 실험</title>
     <link rel="stylesheet" href="../css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js" defer></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 16px; background:#f8f9fa; }
         .container { max-width: 900px; margin: 0 auto; background:#fff; padding:16px; border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,0.08); }
@@ -26,8 +27,11 @@
             <button id="btn-start">시작</button>
             <button id="btn-stop" disabled>중지</button>
             <button id="btn-download" disabled>CSV 다운로드</button>
+            <button id="btn-crop" disabled>선택 영역 크롭</button>
+            <button id="btn-reset-data" disabled>데이터 리셋</button>
             <label style="margin-left:auto">샘플 버퍼: <span id="buffer-size">100</span></label>
         </div>
+        <div class="notice">그래프에서 마우스/터치로 드래그해 영역을 선택한 뒤 '선택 영역 크롭'을 눌러 해당 구간만 남길 수 있습니다.</div>
 
         <div id="acc-values">
             <div class="acc-box">Ax: <span id="ax">0.00</span> g</div>
