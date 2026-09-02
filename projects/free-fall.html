@@ -145,6 +145,7 @@
             .tab-btn { padding:8px 10px; font-size:14px; }
             .chart-container { max-width: 100%; }
             canvas { border-width: 1px; }
+            #projectile-charts { grid-template-columns: 1fr !important; }
         }
 
         @media (min-width: 1024px) {
@@ -233,6 +234,25 @@
         <div class="chart-container" id="chart-wrapper">
             <h2 id="chart-title">자유낙하 t-y 그래프</h2>
             <canvas id="chart"></canvas>
+        </div>
+
+        <!-- 2차원 운동 3개 그래프 -->
+        <div class="chart-container" id="projectile-charts" style="display:none;">
+            <h2>2차원 운동 분석</h2>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
+                <div>
+                    <h3>X-t 그래프</h3>
+                    <canvas id="chart-x-t"></canvas>
+                </div>
+                <div>
+                    <h3>Y-t 그래프</h3>
+                    <canvas id="chart-y-t"></canvas>
+                </div>
+            </div>
+            <div>
+                <h3>Y-X 궤적 (궤적)</h3>
+                <canvas id="chart-y-x"></canvas>
+            </div>
         </div>
     </div>
 
