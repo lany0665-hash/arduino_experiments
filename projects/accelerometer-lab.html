@@ -111,6 +111,7 @@
                     <ul id="trial-list" class="trial-list"></ul>
                     <div class="trial-controls">
                         <button id="saveTrialButton" class="btn-action-primary" disabled>현재 측정 저장</button>
+                        <button id="saveCloudButton" class="btn-action-primary" style="background-color:#28a745; border-color:#28a745;">☁️ Cloud DB에 제출</button>
                         <button id="clearTrialsButton" class="btn-action-danger">모든 회차 삭제</button>
                     </div>
                 </div>
@@ -154,8 +155,65 @@
         </div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
     <script>
     document.addEventListener('DOMContentLoaded', (event) => {
+        // Firebase Config
+        const firebaseConfig = {
+            projectId: "web-experiment-f9b24",
+            appId: "1:718758606428:web:e11ed8d0b64a471ee65899",
+            storageBucket: "web-experiment-f9b24.firebasestorage.app",
+            apiKey: "AIzaSyCYVme6ZP-iyspRmHTtuUSsKXe7K_D0vJQ",
+            authDomain: "web-experiment-f9b24.firebaseapp.com",
+            messagingSenderId: "718758606428"
+        };
+        let auth = null, db = null, currentUser = null;
+        try {
+            if (typeof firebase !== 'undefined') {
+                firebase.initializeApp(firebaseConfig);
+                auth = firebase.auth();
+                db = firebase.firestore();
+                auth.onAuthStateChanged(user => { currentUser = user; });
+            }
+        } catch (e) { console.error('Firebase init error', e); }
+
+        const saveCloudButton = document.getElementById('saveCloudButton');
+        if (saveCloudButton) {
+            saveCloudButton.addEventListener('click', async () => {
+                if (!auth || !currentUser) {
+                    return alert('실험 데이터를 제출하려면 메인 페이지에서 구글 로그인이 필요합니다.');
+                }
+                if (trialsData.length === 0 && recordedData.length === 0) {
+                    return alert('저장할 측정 데이터가 없습니다.');
+                }
+                try {
+                    saveCloudButton.disabled = true;
+                    saveCloudButton.textContent = '제출 중...';
+                    const doc = {
+                        userId: currentUser.uid,
+                        userEmail: currentUser.email,
+                        experimentName: '가속도계 데이터 분석',
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        tab: 'accelerometer-lab',
+                        trialsCount: trialsData.length,
+                        dataSummary: `회차 ${trialsData.length}개 / 현재 샘플 ${recordedData.length}개`,
+                        weatherSample: {},
+                        stargazingSample: []
+                    };
+                    await db.collection('experiments').add(doc);
+                    alert('✅ Cloud DB에 성공적으로 제출되었습니다!');
+                } catch (e) {
+                    alert('❌ 제출 실패: ' + e.message);
+                } finally {
+                    saveCloudButton.disabled = false;
+                    saveCloudButton.textContent = '☁️ Cloud DB에 제출';
+                }
+            });
+        }
         const connectBleButton = document.getElementById('connectBleButton');
         const disconnectBleButton = document.getElementById('disconnectBleButton');
         const recordButton = document.getElementById('recordButton');
