@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Arduino 웹 실험실 - 가속도계, 환경 센서, 자유낙하 실험">
-    <title>아두이노 웹 실험실</title>
+    <meta name="description" content="Arduino ???ㅽ뿕??- 媛?띾룄怨? ?섍꼍 ?쇱꽌, ?먯쑀?숉븯 ?ㅽ뿕">
+    <title>?꾨몢?대끂 ???ㅽ뿕??/title>
     <link rel="stylesheet" href="css/style.css">
     <style>
         .auth-bar {
@@ -24,6 +24,23 @@
             font-size: 1.05em;
             font-weight: 600;
             color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .role-badge {
+            font-size: 0.8em;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: bold;
+        }
+        .role-teacher {
+            background-color: #28a745;
+            color: white;
+        }
+        .role-student {
+            background-color: #17a2b8;
+            color: white;
         }
         .auth-btn {
             padding: 8px 16px;
@@ -48,6 +65,14 @@
         .btn-logout:hover {
             background-color: #c82333;
         }
+        .btn-mode {
+            background-color: #6f42c1;
+            color: white;
+            margin-right: 4px;
+        }
+        .btn-mode:hover {
+            background-color: #59359a;
+        }
         .records-section {
             background-color: #f8f9fa;
             border: 1px solid #e9ecef;
@@ -68,41 +93,62 @@
             background: white;
             border: 1px solid #dee2e6;
             border-radius: 6px;
-            padding: 12px 16px;
-            margin-bottom: 10px;
+            padding: 14px 18px;
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .experiment-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 1px solid #f1f3f5;
+            padding-bottom: 8px;
+        }
+        .student-info {
+            font-size: 0.9em;
+            color: #495057;
+        }
+        .exp-details {
+            font-size: 0.9em;
+            color: #6c757d;
+            background: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-top: 4px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- 구글 로그인 및 사용자 인증 상태 바 -->
+        <!-- 援ш? 濡쒓렇??諛??ъ슜???몄쬆 ?곹깭 諛?-->
         <div class="auth-bar">
-            <div id="userInfo" class="user-status">🔒 구글 로그인이 필요합니다</div>
-            <div>
+            <div id="userInfo" class="user-status">?뵏 援ш? 濡쒓렇?몄씠 ?꾩슂?⑸땲??/div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button id="modeToggleBtn" class="auth-btn btn-mode" onclick="toggleViewMode()" style="display:none;">?럳 ?숈깮??紐⑤뱶濡??꾪솚</button>
                 <button id="signInBtn" class="auth-btn btn-google" onclick="signInWithGoogle()">Sign in with Google</button>
                 <button id="signOutBtn" class="auth-btn btn-logout" onclick="signOut()" style="display:none;">Sign out</button>
             </div>
         </div>
 
-        <h1>아두이노 웹 실험실</h1>
-        <p>환영합니다! 아래에서 수행할 실험 프로젝트를 선택하세요.</p>
-        <p>프로젝트를 시작하기 전에, <a href="uploader.html">펌웨어 업로더</a> 페이지에서 아두이노를 먼저 준비해주세요.</p>
+        <h1>?꾨몢?대끂 ???ㅽ뿕??/h1>
+        <p>?섏쁺?⑸땲?? ?꾨옒?먯꽌 ?섑뻾???ㅽ뿕 ?꾨줈?앺듃瑜??좏깮?섏꽭??</p>
+        <p>?꾨줈?앺듃瑜??쒖옉?섍린 ?꾩뿉, <a href="uploader.html">?뚯썾???낅줈??/a> ?섏씠吏?먯꽌 ?꾨몢?대끂瑜?癒쇱? 以鍮꾪빐二쇱꽭??</p>
 
-        <h2>프로젝트 목록</h2>
+        <h2>?꾨줈?앺듃 紐⑸줉</h2>
         <ul class="project-list">
-            <li><a href="projects/accelerometer-lab.html">➡️ 가속도계 데이터 분석</a></li>
-            <li><a href="projects/environment-lab.html">➡️ 환경 센서 실시간 모니터</a></li>
-            <li><a href="projects/free-fall.html">➡️ 자유낙하 궤적 분석 (스마트폰 영상)</a></li>
-            <li><a href="projects/phone-accelerometer.html">➡️ 스마트폰 가속도 센서 실험</a></li>
+            <li><a href="projects/accelerometer-lab.html">?∽툘 媛?띾룄怨??곗씠??遺꾩꽍</a></li>
+            <li><a href="projects/environment-lab.html">?∽툘 ?섍꼍 ?쇱꽌 ?ㅼ떆媛?紐⑤땲??/a></li>
+            <li><a href="projects/free-fall.html">?∽툘 ?먯쑀?숉븯 沅ㅼ쟻 遺꾩꽍 (?ㅻ쭏?명룿 ?곸긽)</a></li>
+            <li><a href="projects/phone-accelerometer.html">?∽툘 ?ㅻ쭏?명룿 媛?띾룄 ?쇱꽌 ?ㅽ뿕</a></li>
         </ul>
 
-        <!-- 학생 실험 데이터 기록 영역 -->
+        <!-- ?숈깮 諛?援먯궗 ?ㅽ뿕 ?곗씠??湲곕줉 ?곸뿭 -->
         <div id="studentRecordsSection" class="records-section">
-            <h3>🧪 학생 실험 기록 관리</h3>
-            <p id="recordsNotice">구글 로그인 시 작성된 실험 기록을 저장하고 조회할 수 있습니다.</p>
+            <h3 id="recordsTitle">?㎦ ?ㅽ뿕 ?곗씠?????& 議고쉶</h3>
+            <p id="recordsNotice">援ш? 濡쒓렇?????묒꽦???ㅽ뿕 湲곕줉????ν븯怨?議고쉶?????덉뒿?덈떎.</p>
             <div id="experimentsList" style="display:none;"></div>
         </div>
     </div>
@@ -125,6 +171,8 @@
         let auth = null;
         let db = null;
         let currentUser = null;
+        let isTeacherUser = false;
+        let currentViewMode = 'teacher'; // 'teacher' or 'student'
 
         function initFirebase() {
             try {
@@ -133,26 +181,21 @@
                 auth = firebase.auth();
                 db = firebase.firestore();
 
-                auth.onAuthStateChanged(user => {
+                auth.onAuthStateChanged(async user => {
                     currentUser = user;
-                    const userInfo = document.getElementById('userInfo');
-                    const signInBtn = document.getElementById('signInBtn');
-                    const signOutBtn = document.getElementById('signOutBtn');
-                    const expList = document.getElementById('experimentsList');
-                    const notice = document.getElementById('recordsNotice');
-
                     if (user) {
-                        userInfo.textContent = `👤 ${user.displayName || user.email} 님 로그인됨`;
-                        signInBtn.style.display = 'none';
-                        signOutBtn.style.display = 'inline-block';
-                        if (notice) notice.textContent = '학생의 저장된 실험 기록 목록입니다:';
-                        loadStudentExperiments();
+                        isTeacherUser = await checkIsTeacher(user.uid);
+                        const savedMode = sessionStorage.getItem('viewMode');
+                        if (savedMode && (savedMode === 'teacher' || savedMode === 'student')) {
+                            currentViewMode = savedMode;
+                        } else {
+                            currentViewMode = isTeacherUser ? 'teacher' : 'student';
+                        }
+                        updateUIForUser();
                     } else {
-                        userInfo.textContent = '🔒 구글 로그인이 필요합니다';
-                        signInBtn.style.display = 'inline-block';
-                        signOutBtn.style.display = 'none';
-                        if (expList) expList.style.display = 'none';
-                        if (notice) notice.textContent = '구글 로그인 시 작성된 실험 기록을 저장하고 조회할 수 있습니다.';
+                        isTeacherUser = false;
+                        currentViewMode = 'student';
+                        updateUIForUser();
                     }
                 });
             } catch (e) {
@@ -160,10 +203,75 @@
             }
         }
 
+        function updateUIForUser() {
+            const userInfo = document.getElementById('userInfo');
+            const signInBtn = document.getElementById('signInBtn');
+            const signOutBtn = document.getElementById('signOutBtn');
+            const modeToggleBtn = document.getElementById('modeToggleBtn');
+            const expList = document.getElementById('experimentsList');
+            const notice = document.getElementById('recordsNotice');
+            const title = document.getElementById('recordsTitle');
+
+            if (currentUser) {
+                signInBtn.style.display = 'none';
+                signOutBtn.style.display = 'inline-block';
+
+                if (isTeacherUser) {
+                    modeToggleBtn.style.display = 'inline-block';
+                    if (currentViewMode === 'teacher') {
+                        modeToggleBtn.textContent = '?럳 ?숈깮??紐⑤뱶濡??꾪솚';
+                        const roleBadge = '<span class="role-badge role-teacher">?뫅?랅윆?援먯궗 (援먯궗??紐⑤뱶)</span>';
+                        userInfo.innerHTML = `?뫀 ${currentUser.displayName || currentUser.email} ${roleBadge}`;
+                        title.textContent = '?뱥 援먯궗 ??쒕낫??- ?꾩껜 ?숈깮 ?쒖텧 ?꾪솴';
+                        notice.textContent = '紐⑤뱺 ?숈깮???쒖텧???ㅽ뿕 ?곗씠??紐⑸줉?낅땲??';
+                        loadTeacherDashboard();
+                    } else {
+                        modeToggleBtn.textContent = '?뫅?랅윆?援먯궗??紐⑤뱶濡??꾪솚';
+                        const roleBadge = '<span class="role-badge role-student">?뫅?랅윆?援먯궗 (?숈깮??紐⑤뱶 泥댄뿕)</span>';
+                        userInfo.innerHTML = `?뫀 ${currentUser.displayName || currentUser.email} ${roleBadge}`;
+                        title.textContent = '?㎦ ???ㅽ뿕 湲곕줉 愿由?(?숈깮???붾㈃)';
+                        notice.textContent = '?닿? ??ν븳 ?ㅽ뿕 湲곕줉 紐⑸줉?낅땲??(?숈깮???붾㈃ 誘몃━蹂닿린):';
+                        loadStudentExperiments();
+                    }
+                } else {
+                    modeToggleBtn.style.display = 'none';
+                    const roleBadge = '<span class="role-badge role-student">?럳 ?숈깮</span>';
+                    userInfo.innerHTML = `?뫀 ${currentUser.displayName || currentUser.email} ${roleBadge}`;
+                    title.textContent = '?㎦ ???ㅽ뿕 湲곕줉 愿由?;
+                    notice.textContent = '?닿? ??ν븳 ?ㅽ뿕 湲곕줉 紐⑸줉?낅땲??';
+                    loadStudentExperiments();
+                }
+            } else {
+                modeToggleBtn.style.display = 'none';
+                userInfo.textContent = '?뵏 援ш? 濡쒓렇?몄씠 ?꾩슂?⑸땲??;
+                signInBtn.style.display = 'inline-block';
+                signOutBtn.style.display = 'none';
+                if (expList) expList.style.display = 'none';
+                title.textContent = '?㎦ ?ㅽ뿕 ?곗씠?????& 議고쉶';
+                notice.textContent = '援ш? 濡쒓렇?????묒꽦???ㅽ뿕 湲곕줉????ν븯怨?議고쉶?????덉뒿?덈떎.';
+            }
+        }
+
+        function toggleViewMode() {
+            if (!isTeacherUser) return;
+            currentViewMode = (currentViewMode === 'teacher') ? 'student' : 'teacher';
+            sessionStorage.setItem('viewMode', currentViewMode);
+            updateUIForUser();
+        }
+
+        async function checkIsTeacher(uid) {
+            try {
+                const doc = await db.collection('roles').doc(uid).get();
+                return doc.exists && doc.data().isTeacher === true;
+            } catch (e) {
+                return false;
+            }
+        }
+
         function signInWithGoogle() {
-            if (!auth) return alert('Firebase 초기화 오류');
+            if (!auth) return alert('Firebase 珥덇린???ㅻ쪟');
             const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider).catch(err => alert('로그인 실패: ' + err.message));
+            auth.signInWithPopup(provider).catch(err => alert('濡쒓렇???ㅽ뙣: ' + err.message));
         }
 
         function signOut() {
@@ -175,7 +283,7 @@
             const expList = document.getElementById('experimentsList');
             if (!auth || !currentUser || !expList) return;
             expList.style.display = 'block';
-            expList.innerHTML = '<p style="color:#6c757d;">실험 기록을 불러오는 중...</p>';
+            expList.innerHTML = '<p style="color:#6c757d;">???ㅽ뿕 湲곕줉??遺덈윭?ㅻ뒗 以?..</p>';
 
             try {
                 const snap = await db.collection('experiments')
@@ -183,30 +291,82 @@
                     .get();
 
                 if (snap.empty) {
-                    expList.innerHTML = '<p style="color:#6c757d;">아직 저장된 실험 기록이 없습니다.</p>';
+                    expList.innerHTML = '<p style="color:#6c757d;">?꾩쭅 ??λ맂 ?ㅽ뿕 湲곕줉???놁뒿?덈떎. ?ㅽ뿕 ?섏씠吏?먯꽌 ?곗씠?곕? ??ν빐蹂댁꽭??</p>';
                     return;
                 }
 
-                let html = '<ul class="experiment-list">';
-                snap.forEach(doc => {
-                    const data = doc.data();
-                    const dateStr = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate().toLocaleString('ko-KR') : '방금 전';
-                    const expName = data.experimentName || data.tab || '아두이노 실험';
-                    html += `
-                        <li class="experiment-item">
-                            <div>
-                                <strong>${expName}</strong>
-                                <span style="font-size:0.85em; color:#6c757d; margin-left:10px;">${dateStr}</span>
-                            </div>
-                        </li>
-                    `;
-                });
-                html += '</ul>';
-                expList.innerHTML = html;
+                renderExperiments(snap, false);
             } catch (e) {
                 console.error('Load experiments error:', e);
-                expList.innerHTML = '<p style="color:#dc3545;">실험 기록 불러오기 실패: ' + e.message + '</p>';
+                expList.innerHTML = '<p style="color:#dc3545;">?ㅽ뿕 湲곕줉 遺덈윭?ㅺ린 ?ㅽ뙣: ' + e.message + '</p>';
             }
+        }
+
+        async function loadTeacherDashboard() {
+            const expList = document.getElementById('experimentsList');
+            if (!auth || !currentUser || !expList) return;
+            expList.style.display = 'block';
+            expList.innerHTML = '<p style="color:#6c757d;">?꾩껜 ?숈깮???쒖텧 ?곗씠?곕? 遺덈윭?ㅻ뒗 以?..</p>';
+
+            try {
+                const snap = await db.collection('experiments').get();
+
+                if (snap.empty) {
+                    expList.innerHTML = '<p style="color:#6c757d;">?쒖텧???숈깮 ?ㅽ뿕 湲곕줉???놁뒿?덈떎.</p>';
+                    return;
+                }
+
+                renderExperiments(snap, true);
+            } catch (e) {
+                console.error('Teacher dashboard load error:', e);
+                expList.innerHTML = '<p style="color:#dc3545;">?숈깮 湲곕줉 遺덈윭?ㅺ린 ?ㅽ뙣: ' + e.message + '</p>';
+            }
+        }
+
+        function renderExperiments(snap, isTeacher) {
+            const expList = document.getElementById('experimentsList');
+            let html = '<ul class="experiment-list">';
+            
+            // ?좎쭨 ?ㅻ쫫李⑥닚/?대┝李⑥닚 ?뺣젹
+            const docs = [];
+            snap.forEach(doc => docs.push(doc.data()));
+            docs.sort((a, b) => {
+                const ta = a.timestamp && a.timestamp.toDate ? a.timestamp.toDate().getTime() : 0;
+                const tb = b.timestamp && b.timestamp.toDate ? b.timestamp.toDate().getTime() : 0;
+                return tb - ta;
+            });
+
+            docs.forEach(data => {
+                const dateStr = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate().toLocaleString('ko-KR') : '諛⑷툑 ??;
+                const expName = data.experimentName || data.tab || '?꾨몢?대끂 ?ㅽ뿕';
+                const studentLabel = isTeacher ? `<span class="student-info">?뫀 <strong>${data.userEmail || data.userId}</strong></span>` : '';
+                
+                let detailSummary = '';
+                if (data.dataSummary) {
+                    detailSummary = `?뱤 ?붿빟: ${data.dataSummary}`;
+                } else if (data.trialsCount !== undefined) {
+                    detailSummary = `?뱤 ?뚯감 ?? ${data.trialsCount}??;
+                } else {
+                    detailSummary = '?뱤 ????꾨즺??;
+                }
+
+                html += `
+                    <li class="experiment-item">
+                        <div class="experiment-header">
+                            <div>
+                                <strong style="font-size:1.05em; color:#007BFF;">${expName}</strong>
+                                ${studentLabel}
+                            </div>
+                            <span style="font-size:0.85em; color:#6c757d;">?븩 ${dateStr}</span>
+                        </div>
+                        <div class="exp-details">
+                            ${detailSummary}
+                        </div>
+                    </li>
+                `;
+            });
+            html += '</ul>';
+            expList.innerHTML = html;
         }
 
         window.addEventListener('DOMContentLoaded', initFirebase);
