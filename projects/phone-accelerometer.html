@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스마트폰 가속도 실험</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js" defer></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 16px; background:#f8f9fa; }
+        .container { max-width: 900px; margin: 0 auto; background:#fff; padding:16px; border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,0.08); }
+        .controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+        button { padding:10px 14px; border-radius:6px; border:none; background:#007bff; color:#fff; }
+        #acc-values { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0; }
+        .acc-box { background:#f1f3f5; padding:8px 12px; border-radius:6px; min-width:110px; text-align:center; }
+        canvas { width:100% !important; height:220px !important; }
+        .notice { font-size:0.9em; color:#666; margin-top:8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>스마트폰 가속도 센서 실험</h1>
+        <p class="notice">모바일 기기에서 이 페이지를 열고 '시작'을 눌러 가속도 데이터를 실시간으로 확인하세요. iOS에서는 권한 요청이 필요합니다.</p>
+
+        <div class="controls">
+            <button id="btn-start">시작</button>
+            <button id="btn-stop" disabled>중지</button>
+            <button id="btn-download" disabled>CSV 다운로드</button>
+            <label style="margin-left:auto">샘플 버퍼: <span id="buffer-size">100</span></label>
+        </div>
+
+        <div style="background:#f1f3f5; padding:10px; border-radius:6px; margin:10px 0;">
+            <h3>구간 선택</h3>
+            <p style="font-size:0.9em; color:#555; margin:8px 0;">
+                그래프를 클릭해서 <strong style="color:#e74c3c;">시작 지점</strong>을 선택한 후, <strong style="color:#2ecc71;">종료 지점</strong>을 선택하세요.
+            </p>
+            <div class="controls">
+                <span id="selection-status" style="font-weight:bold; color:#666;">준비됨</span>
+                <span id="time-range" style="margin-left:10px; font-weight:bold;">전체: 0 ms</span>
+                <button id="btn-crop" disabled style="margin-left:auto;">선택 구간 크롭</button>
+                <button id="btn-reset-data" disabled>데이터 리셋</button>
+            </div>
+        </div>
+
+        <div id="acc-values">
+            <div class="acc-box">Ax: <span id="ax">0.00</span> g</div>
+            <div class="acc-box">Ay: <span id="ay">0.00</span> g</div>
+            <div class="acc-box">Az: <span id="az">0.00</span> g</div>
+            <div class="acc-box">|a|: <span id="atot">0.00</span> g</div>
+        </div>
+
+        <h3>실시간 그래프</h3>
+        <canvas id="accChart"></canvas>
+        
+        <h3 style="margin-top:20px;">타임라인 선택</h3>
+        <canvas id="timelineCanvas" style="border: 1px solid #ddd; cursor: pointer; width:100% !important; height:50px !important;"></canvas>
+        <p style="font-size:0.85em; color:#666; margin-top:5px;">
+            시작 지점을 클릭한 후 종료 지점을 클릭하세요. 선택된 범위가 그래프에도 표시됩니다.
+        </p>
+    </div>
+
+    <script src="../js/phone-accel.js" defer></script>
+</body>
+</html>
