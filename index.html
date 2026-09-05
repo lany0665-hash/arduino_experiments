@@ -569,6 +569,15 @@
       </div>
     </header>
 
+    <!-- 구글 로그인 및 사용자 상태 바 -->
+    <div style="display:flex; justify-content:space-between; align-items:center; background: #FFFFFF; padding: 12px 16px; border-radius: 12px; margin-bottom: 16px; border: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(0,0,0,0.04); flex-wrap: wrap; gap: 10px;">
+      <div id="userInfo" style="color:var(--primary-navy); font-weight:600; font-size: 0.95rem;">🔒 구글 로그인이 필요합니다</div>
+      <div>
+        <button id="signInBtn" class="tab-btn" onclick="signInWithGoogle()" style="padding:8px 16px; background-color: var(--primary-teal); color: white; border-radius: 8px;">Sign in with Google</button>
+        <button id="signOutBtn" class="tab-btn" onclick="signOut()" style="padding:8px 16px; background-color: #E53E3E; color: white; border-radius: 8px; display:none;">Sign out</button>
+      </div>
+    </div>
+
     <!-- 알림 및 안내 배너 (API 키 미등록 / 403 오류 등) -->
     <div id="alertBanner" class="alert-banner"></div>
 
@@ -633,6 +642,18 @@
           <div id="rawGrid" class="raw-data-grid">
             <!-- JS 동적 생성 -->
           </div>
+        </div>
+
+        <!-- 학생 탐구/실험 저장 및 조회 섹션 -->
+        <div style="margin-top:16px; background-color: #F8FAFC; border-radius: 12px; padding: 16px; border: 1px solid var(--border-color);">
+          <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 8px; color: var(--primary-navy);">🧪 학생 탐구 및 실험 기록 저장</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">구글 로그인 후 현재 날씨 관측값 및 천체관측 예보 데이터를 나만의 탐구 기록으로 저장할 수 있습니다.</p>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button id="saveExpBtn" class="tab-btn" onclick="saveExperiment()" style="padding:10px 16px; background-color: var(--primary-navy); color: white; border-radius: 8px;">💾 실험 데이터 저장</button>
+            <button id="listExpBtn" class="tab-btn" onclick="listExperiments()" style="padding:10px 16px; background-color: var(--primary-teal); color: white; border-radius: 8px; display:none;">📂 내 저장 기록 보기</button>
+            <span id="saveStatus" style="font-size:0.85rem; color:var(--text-muted)"></span>
+          </div>
+          <div id="experimentsList" style="margin-top:12px; display:none; background:#fff; padding:12px; border-radius:8px; border:1px solid var(--border-color);"></div>
         </div>
       </section>
 
@@ -1056,12 +1077,77 @@
        render();
 
       } catch (err) {
-       console.error('날씨 데이터 수신 실패:', err);
-       document.getElementById('loading').innerHTML = `
-         <p style="color: #E53E3E; font-weight: bold;">⚠️ 데이터를 불러오지 못했습니다.</p>
-         <p style="font-size: 0.9rem; margin-top: 8px;">서버(app.py)가 실행 중인지 확인해주세요.</p>
-       `;
+       console.warn('API 서버 미작동 - 샘플 날씨 데이터로 전환:', err);
+       weatherData = generateMockWeatherData();
+       stargazingData = generateMockStargazingData();
+
+       const alertBanner = document.getElementById('alertBanner');
+       if (alertBanner) {
+         alertBanner.style.display = 'block';
+         alertBanner.innerHTML = `🔔 <strong>안내:</strong> 웹 서버 미실행 시 샘플 날씨 데이터로 작동합니다.`;
+       }
+
+       document.getElementById('loading').style.display = 'none';
+       document.getElementById('content').style.display = 'block';
+       render();
       }
+    }
+
+    /* Mock 날씨 데이터 생성 */
+    function generateMockWeatherData() {
+      const now = new Date();
+      return {
+        now: {
+          title: "지금 날씨",
+          kind: "관측",
+          T1H: "27.0",
+          REH: "62",
+          WSD: "2.8",
+          PTY: "0",
+          PTY_text: "없음",
+          RN1: "0.0",
+          VEC: "180",
+          baseDate: now.toISOString().split('T')[0].replace(/-/g, ''),
+          baseTime: "1200",
+          date: now.toLocaleDateString('ko-KR'),
+          time: now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+        },
+        yesterday: {
+          title: "어제 이맘때",
+          kind: "관측",
+          T1H: "25.5",
+          REH: "68",
+          WSD: "2.1",
+          PTY: "0",
+          PTY_text: "없음",
+          RN1: "0.0",
+          VEC: "160",
+          baseDate: now.toISOString().split('T')[0].replace(/-/g, ''),
+          baseTime: "1200",
+          date: "어제",
+          time: "12:00"
+        },
+        tomorrow: {
+          title: "내일 아침 9시",
+          kind: "예보",
+          T1H: "24.0",
+          REH: "55",
+          WSD: "3.0",
+          POP: "20",
+          PTY: "0",
+          PTY_text: "없음",
+          SKY: "1",
+          SKY_text: "맑음",
+          baseDate: now.toISOString().split('T')[0].replace(/-/g, ''),
+          baseTime: "1200",
+          fcstDate: now.toISOString().split('T')[0].replace(/-/g, ''),
+          fcstTime: "0900",
+          date: "내일",
+          time: "09:00"
+        },
+        mock: true,
+        message: "샘플 날씨 데이터 모드로 작동 중입니다."
+      };
     }
 
     /* Mock 천체관측 데이터 생성 */
@@ -1094,8 +1180,132 @@
       return data;
     }
 
-    // 페이지 시작 시 데이터 로드 실행
-    window.addEventListener('DOMContentLoaded', loadWeatherData);
+    // 페이지 시작 시 데이터 로드 및 Firebase 초기화 실행
+    window.addEventListener('DOMContentLoaded', () => {
+      loadWeatherData();
+      initFirebase();
+    });
+
+    /* =========================================================================
+       9. Firebase 인증 & Firestore 관련 함수
+       ========================================================================= */
+    const firebaseConfig = {
+      apiKey: "AIzaSyCYVme6ZP-iyspRmHTtuUSsKXe7K_D0vJQ",
+      authDomain: "web-experiment-f9b24.firebaseapp.com",
+      projectId: "web-experiment-f9b24",
+      storageBucket: "web-experiment-f9b24.firebasestorage.app",
+      messagingSenderId: "718758606428",
+      appId: "1:718758606428:web:b697cf4961e6e511e65899"
+    };
+
+    let auth = null;
+    let db = null;
+    let currentUser = null;
+
+    function initFirebase() {
+      try {
+        if (typeof firebase === 'undefined') {
+          console.warn('Firebase SDK not loaded.');
+          return;
+        }
+        firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        db = firebase.firestore();
+
+        auth.onAuthStateChanged(user => {
+          currentUser = user;
+          const userInfo = document.getElementById('userInfo');
+          const signInBtn = document.getElementById('signInBtn');
+          const signOutBtn = document.getElementById('signOutBtn');
+          const listExpBtn = document.getElementById('listExpBtn');
+          if (user) {
+            userInfo.textContent = `👤 ${user.displayName || user.email} 님 로그인됨`;
+            signInBtn.style.display = 'none';
+            signOutBtn.style.display = 'inline-block';
+            if (listExpBtn) listExpBtn.style.display = 'inline-block';
+          } else {
+            userInfo.textContent = '🔒 구글 로그인이 필요합니다';
+            signInBtn.style.display = 'inline-block';
+            signOutBtn.style.display = 'none';
+            if (listExpBtn) listExpBtn.style.display = 'none';
+            const expList = document.getElementById('experimentsList');
+            if (expList) expList.style.display = 'none';
+          }
+        });
+      } catch (e) {
+        console.error('Firebase init error:', e);
+      }
+    }
+
+    function signInWithGoogle() {
+      if (!auth) return alert('Firebase가 초기화되지 않았습니다.');
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider).catch(err => alert('로그인 실패: ' + err.message));
+    }
+
+    function signOut() {
+      if (!auth) return;
+      auth.signOut();
+    }
+
+    async function saveExperiment() {
+      const status = document.getElementById('saveStatus');
+      status.textContent = '';
+      if (!auth || !currentUser) {
+        alert('실험 데이터를 저장하려면 구글 로그인이 필요합니다.');
+        return;
+      }
+      try {
+        status.textContent = '저장 중...';
+        const currentItem = weatherData ? weatherData[currentTab] : null;
+        const doc = {
+          userId: currentUser.uid,
+          userEmail: currentUser.email,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+          tab: currentTab,
+          weatherSample: currentItem || {},
+          stargazingSample: stargazingData || []
+        };
+        await db.collection('experiments').add(doc);
+        status.textContent = '✅ 성공적으로 저장되었습니다!';
+        setTimeout(() => { status.textContent = ''; }, 3000);
+      } catch (e) {
+        console.error('Save error', e);
+        status.textContent = '❌ 저장 실패: ' + (e.message || e);
+      }
+    }
+
+    async function listExperiments() {
+      const container = document.getElementById('experimentsList');
+      if (!auth || !currentUser) return;
+      container.style.display = 'block';
+      container.innerHTML = '불러오는 중...';
+      try {
+        const snap = await db.collection('experiments')
+          .where('userId', '==', currentUser.uid)
+          .get();
+        if (snap.empty) {
+          container.innerHTML = '<p style="color:var(--text-muted)">저장된 실험 기록이 없습니다.</p>';
+          return;
+        }
+        let html = '<h4 style="margin-bottom:8px; font-weight:700;">📂 저장된 내 실험 기록 (' + snap.size + '건)</h4><ul style="padding-left:18px;">';
+        snap.forEach(doc => {
+          const data = doc.data();
+          const dateStr = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate().toLocaleString('ko-KR') : '방금 전';
+          html += `<li style="margin-bottom:6px;"><strong>${dateStr}</strong> (탭: ${data.tab || '기본'}) - 항목 ${data.stargazingSample ? data.stargazingSample.length : 0}개</li>`;
+        });
+        html += '</ul>';
+        container.innerHTML = html;
+      } catch (e) {
+        console.error('List error', e);
+        container.innerHTML = '<p style="color:#E53E3E">기록 불러오기 실패: ' + e.message + '</p>';
+      }
+    }
   </script>
+
+  <!-- Firebase Compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 </body>
 </html>
