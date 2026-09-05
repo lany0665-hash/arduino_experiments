@@ -1,0 +1,56 @@
+name: Grant Teacher Role
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: 'Teacher Email'
+        required: true
+        default: 'lany0665@gmail.com'
+
+jobs:
+  grant_role:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install firebase-admin
+
+      - name: Grant Role
+        env:
+          SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY }}
+          TARGET_EMAIL: ${{ github.event.inputs.email }}
+        run: |
+          node -e "
+          const { initializeApp, cert } = require('firebase-admin/app');
+          const { getAuth } = require('firebase-admin/auth');
+          const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+
+          const keyB64 = process.env.SERVICE_ACCOUNT_KEY;
+          const serviceAccount = JSON.parse(Buffer.from(keyB64, 'base64').toString('utf8'));
+
+          initializeApp({ credential: cert(serviceAccount) });
+          const auth = getAuth();
+          const db = getFirestore();
+
+          async function main() {
+            const email = process.env.TARGET_EMAIL;
+            console.log('Processing:', email);
+            const user = await auth.getUserByEmail(email);
+            console.log('User UID:', user.uid);
+            await db.collection('roles').doc(user.uid).set({
+              isTeacher: true,
+              email: email,
+              updatedAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+            console.log('Successfully set isTeacher=true for', email);
+          }
+          main().catch(err => { console.error(err); process.exit(1); });
+          "
