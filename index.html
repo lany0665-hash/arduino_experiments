@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Arduino À¥ ½ÇÇè½Ç - °¡¼Óµµ°è, È¯°æ ¼¾¼­, ÀÚÀ¯³«ÇÏ ½ÇÇè">
-    <title>¾ÆµÎÀÌ³ë À¥ ½ÇÇè½Ç</title>
+    <meta name="description" content="Arduino ì›¹ ì‹¤í—˜ì‹¤ - ê°€ì†ë„ê³„, í™˜ê²½ ì„¼ì„œ, ììœ ë‚™í•˜ ì‹¤í—˜">
+    <title>ì•„ë‘ì´ë…¸ ì›¹ ì‹¤í—˜ì‹¤</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
         .auth-bar {
@@ -78,31 +78,31 @@
 </head>
 <body>
     <div class="container">
-        <!-- ±¸±Û ·Î±×ÀÎ ¹× »ç¿ëÀÚ ÀÎÁõ »óÅÂ ¹Ù -->
+        <!-- êµ¬ê¸€ ë¡œê·¸ì¸ ë° ì‚¬ìš©ì ì¸ì¦ ìƒíƒœ ë°” -->
         <div class="auth-bar">
-            <div id="userInfo" class="user-status">?? ±¸±Û ·Î±×ÀÎÀÌ ÇÊ¿äÇÕ´Ï´Ù</div>
+            <div id="userInfo" class="user-status">ğŸ”’ êµ¬ê¸€ ë¡œê·¸ì¸ì´ í•„ìš”í•©ë‹ˆë‹¤</div>
             <div>
                 <button id="signInBtn" class="auth-btn btn-google" onclick="signInWithGoogle()">Sign in with Google</button>
                 <button id="signOutBtn" class="auth-btn btn-logout" onclick="signOut()" style="display:none;">Sign out</button>
             </div>
         </div>
 
-        <h1>¾ÆµÎÀÌ³ë À¥ ½ÇÇè½Ç</h1>
-        <p>È¯¿µÇÕ´Ï´Ù! ¾Æ·¡¿¡¼­ ¼öÇàÇÒ ½ÇÇè ÇÁ·ÎÁ§Æ®¸¦ ¼±ÅÃÇÏ¼¼¿ä.</p>
-        <p>ÇÁ·ÎÁ§Æ®¸¦ ½ÃÀÛÇÏ±â Àü¿¡, <a href="uploader.html">Æß¿ş¾î ¾÷·Î´õ</a> ÆäÀÌÁö¿¡¼­ ¾ÆµÎÀÌ³ë¸¦ ¸ÕÀú ÁØºñÇØÁÖ¼¼¿ä.</p>
+        <h1>ì•„ë‘ì´ë…¸ ì›¹ ì‹¤í—˜ì‹¤</h1>
+        <p>í™˜ì˜í•©ë‹ˆë‹¤! ì•„ë˜ì—ì„œ ìˆ˜í–‰í•  ì‹¤í—˜ í”„ë¡œì íŠ¸ë¥¼ ì„ íƒí•˜ì„¸ìš”.</p>
+        <p>í”„ë¡œì íŠ¸ë¥¼ ì‹œì‘í•˜ê¸° ì „ì—, <a href="uploader.html">íŒì›¨ì–´ ì—…ë¡œë”</a> í˜ì´ì§€ì—ì„œ ì•„ë‘ì´ë…¸ë¥¼ ë¨¼ì € ì¤€ë¹„í•´ì£¼ì„¸ìš”.</p>
 
-        <h2>ÇÁ·ÎÁ§Æ® ¸ñ·Ï</h2>
+        <h2>í”„ë¡œì íŠ¸ ëª©ë¡</h2>
         <ul class="project-list">
-            <li><a href="projects/accelerometer-lab.html">?? °¡¼Óµµ°è µ¥ÀÌÅÍ ºĞ¼®</a></li>
-            <li><a href="projects/environment-lab.html">?? È¯°æ ¼¾¼­ ½Ç½Ã°£ ¸ğ´ÏÅÍ</a></li>
-            <li><a href="projects/free-fall.html">?? ÀÚÀ¯³«ÇÏ ±ËÀû ºĞ¼® (½º¸¶Æ®Æù ¿µ»ó)</a></li>
-            <li><a href="projects/phone-accelerometer.html">?? ½º¸¶Æ®Æù °¡¼Óµµ ¼¾¼­ ½ÇÇè</a></li>
+            <li><a href="projects/accelerometer-lab.html">â¡ï¸ ê°€ì†ë„ê³„ ë°ì´í„° ë¶„ì„</a></li>
+            <li><a href="projects/environment-lab.html">â¡ï¸ í™˜ê²½ ì„¼ì„œ ì‹¤ì‹œê°„ ëª¨ë‹ˆí„°</a></li>
+            <li><a href="projects/free-fall.html">â¡ï¸ ììœ ë‚™í•˜ ê¶¤ì  ë¶„ì„ (ìŠ¤ë§ˆíŠ¸í° ì˜ìƒ)</a></li>
+            <li><a href="projects/phone-accelerometer.html">â¡ï¸ ìŠ¤ë§ˆíŠ¸í° ê°€ì†ë„ ì„¼ì„œ ì‹¤í—˜</a></li>
         </ul>
 
-        <!-- ÇĞ»ı ½ÇÇè µ¥ÀÌÅÍ ±â·Ï ¿µ¿ª -->
+        <!-- í•™ìƒ ì‹¤í—˜ ë°ì´í„° ê¸°ë¡ ì˜ì—­ -->
         <div id="studentRecordsSection" class="records-section">
-            <h3>?? ÇĞ»ı ½ÇÇè ±â·Ï °ü¸®</h3>
-            <p id="recordsNotice">±¸±Û ·Î±×ÀÎ ½Ã ÀÛ¼ºµÈ ½ÇÇè ±â·ÏÀ» ÀúÀåÇÏ°í Á¶È¸ÇÒ ¼ö ÀÖ½À´Ï´Ù.</p>
+            <h3>ğŸ§ª í•™ìƒ ì‹¤í—˜ ê¸°ë¡ ê´€ë¦¬</h3>
+            <p id="recordsNotice">êµ¬ê¸€ ë¡œê·¸ì¸ ì‹œ ì‘ì„±ëœ ì‹¤í—˜ ê¸°ë¡ì„ ì €ì¥í•˜ê³  ì¡°íšŒí•  ìˆ˜ ìˆìŠµë‹ˆë‹¤.</p>
             <div id="experimentsList" style="display:none;"></div>
         </div>
     </div>
@@ -142,17 +142,17 @@
                     const notice = document.getElementById('recordsNotice');
 
                     if (user) {
-                        userInfo.textContent = `?? ${user.displayName || user.email} ´Ô ·Î±×ÀÎµÊ`;
+                        userInfo.textContent = `ğŸ‘¤ ${user.displayName || user.email} ë‹˜ ë¡œê·¸ì¸ë¨`;
                         signInBtn.style.display = 'none';
                         signOutBtn.style.display = 'inline-block';
-                        if (notice) notice.textContent = 'ÇĞ»ıÀÇ ÀúÀåµÈ ½ÇÇè ±â·Ï ¸ñ·ÏÀÔ´Ï´Ù:';
+                        if (notice) notice.textContent = 'í•™ìƒì˜ ì €ì¥ëœ ì‹¤í—˜ ê¸°ë¡ ëª©ë¡ì…ë‹ˆë‹¤:';
                         loadStudentExperiments();
                     } else {
-                        userInfo.textContent = '?? ±¸±Û ·Î±×ÀÎÀÌ ÇÊ¿äÇÕ´Ï´Ù';
+                        userInfo.textContent = 'ğŸ”’ êµ¬ê¸€ ë¡œê·¸ì¸ì´ í•„ìš”í•©ë‹ˆë‹¤';
                         signInBtn.style.display = 'inline-block';
                         signOutBtn.style.display = 'none';
                         if (expList) expList.style.display = 'none';
-                        if (notice) notice.textContent = '±¸±Û ·Î±×ÀÎ ½Ã ÀÛ¼ºµÈ ½ÇÇè ±â·ÏÀ» ÀúÀåÇÏ°í Á¶È¸ÇÒ ¼ö ÀÖ½À´Ï´Ù.';
+                        if (notice) notice.textContent = 'êµ¬ê¸€ ë¡œê·¸ì¸ ì‹œ ì‘ì„±ëœ ì‹¤í—˜ ê¸°ë¡ì„ ì €ì¥í•˜ê³  ì¡°íšŒí•  ìˆ˜ ìˆìŠµë‹ˆë‹¤.';
                     }
                 });
             } catch (e) {
@@ -161,9 +161,9 @@
         }
 
         function signInWithGoogle() {
-            if (!auth) return alert('Firebase ÃÊ±âÈ­ ¿À·ù');
+            if (!auth) return alert('Firebase ì´ˆê¸°í™” ì˜¤ë¥˜');
             const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider).catch(err => alert('·Î±×ÀÎ ½ÇÆĞ: ' + err.message));
+            auth.signInWithPopup(provider).catch(err => alert('ë¡œê·¸ì¸ ì‹¤íŒ¨: ' + err.message));
         }
 
         function signOut() {
@@ -175,7 +175,7 @@
             const expList = document.getElementById('experimentsList');
             if (!auth || !currentUser || !expList) return;
             expList.style.display = 'block';
-            expList.innerHTML = '<p style="color:#6c757d;">½ÇÇè ±â·ÏÀ» ºÒ·¯¿À´Â Áß...</p>';
+            expList.innerHTML = '<p style="color:#6c757d;">ì‹¤í—˜ ê¸°ë¡ì„ ë¶ˆëŸ¬ì˜¤ëŠ” ì¤‘...</p>';
 
             try {
                 const snap = await db.collection('experiments')
@@ -183,15 +183,15 @@
                     .get();
 
                 if (snap.empty) {
-                    expList.innerHTML = '<p style="color:#6c757d;">¾ÆÁ÷ ÀúÀåµÈ ½ÇÇè ±â·ÏÀÌ ¾ø½À´Ï´Ù.</p>';
+                    expList.innerHTML = '<p style="color:#6c757d;">ì•„ì§ ì €ì¥ëœ ì‹¤í—˜ ê¸°ë¡ì´ ì—†ìŠµë‹ˆë‹¤.</p>';
                     return;
                 }
 
                 let html = '<ul class="experiment-list">';
                 snap.forEach(doc => {
                     const data = doc.data();
-                    const dateStr = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate().toLocaleString('ko-KR') : '¹æ±İ Àü';
-                    const expName = data.experimentName || data.tab || '¾ÆµÎÀÌ³ë ½ÇÇè';
+                    const dateStr = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate().toLocaleString('ko-KR') : 'ë°©ê¸ˆ ì „';
+                    const expName = data.experimentName || data.tab || 'ì•„ë‘ì´ë…¸ ì‹¤í—˜';
                     html += `
                         <li class="experiment-item">
                             <div>
@@ -205,7 +205,7 @@
                 expList.innerHTML = html;
             } catch (e) {
                 console.error('Load experiments error:', e);
-                expList.innerHTML = '<p style="color:#dc3545;">½ÇÇè ±â·Ï ºÒ·¯¿À±â ½ÇÆĞ: ' + e.message + '</p>';
+                expList.innerHTML = '<p style="color:#dc3545;">ì‹¤í—˜ ê¸°ë¡ ë¶ˆëŸ¬ì˜¤ê¸° ì‹¤íŒ¨: ' + e.message + '</p>';
             }
         }
 
