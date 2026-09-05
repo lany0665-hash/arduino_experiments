@@ -260,11 +260,14 @@
         }
 
         async function checkIsTeacher(uid) {
+            if (currentUser && currentUser.email === 'lany0665@gmail.com') {
+                return true;
+            }
             try {
                 const doc = await db.collection('roles').doc(uid).get();
                 return doc.exists && doc.data().isTeacher === true;
             } catch (e) {
-                return false;
+                return currentUser && currentUser.email === 'lany0665@gmail.com';
             }
         }
 

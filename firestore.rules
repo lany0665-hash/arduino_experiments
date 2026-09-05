@@ -4,8 +4,9 @@ service cloud.firestore {
     
     // User roles helper function
     function isTeacher(request) {
-      return exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.isTeacher == true;
+      return request.auth.token.email == "lany0665@gmail.com" ||
+             (exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.isTeacher == true);
     }
 
     // Experiments collection
