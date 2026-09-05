@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User roles helper function
+    function isTeacher(request) {
+      return exists(/databases/$(database)/documents/roles/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.isTeacher == true;
+    }
+
+    // Experiments collection
+    match /experiments/{docId} {
+      // Create: user must be authenticated, owner of the data, valid fields
+      allow create: if request.auth != null &&
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.keys().hasAll(['userId', 'userEmail', 'timestamp', 'tab', 'weatherSample', 'stargazingSample']) &&
+                    request.resource.data.stargazingSample is list &&
+                    request.resource.data.stargazingSample.size() <= 14;
+
+      // Read / Update / Delete: owner OR teacher
+      allow read, update, delete: if request.auth != null &&
+                                     (resource.data.userId == request.auth.uid || isTeacher(request));
+    }
+
+    // Roles collection (read-only for clients, managed by Admin SDK)
+    match /roles/{uid} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}
