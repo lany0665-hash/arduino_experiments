@@ -136,7 +136,6 @@ function handleMotion(event) {
     const rel = t - sessionStart;
     samples.push({ t, rel, ax: gx, ay: gy, az: gz });
     if (samples.length > MAX_SAMPLES) samples.shift();
-    if (!originalSamples) originalSamples = samples.slice();
 
     accChart.data.datasets[0].data.push({ x: rel, y: gx });
     accChart.data.datasets[1].data.push({ x: rel, y: gy });
