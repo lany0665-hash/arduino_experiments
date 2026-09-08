@@ -5,6 +5,7 @@ let sessionStart = null;
 let selectionMode = 0;
 let cropStartMs = null;
 let cropEndMs = null;
+let sensorWatchdogTimer = null;
 const MAX_SAMPLES = 200;
 
 const btnStart = document.getElementById('btn-start');
@@ -12,8 +13,11 @@ const btnStop = document.getElementById('btn-stop');
 const btnDownload = document.getElementById('btn-download');
 const btnCrop = document.getElementById('btn-crop');
 const btnResetData = document.getElementById('btn-reset-data');
+const btnCloudSubmit = document.getElementById('btn-cloud-submit');
 const selectionStatus = document.getElementById('selection-status');
 const timeRangeSpan = document.getElementById('time-range');
+const recordStatusEl = document.getElementById('record-status');
+const sensorWarningEl = document.getElementById('sensor-warning');
 const axEl = document.getElementById('ax');
 const ayEl = document.getElementById('ay');
 const azEl = document.getElementById('az');
@@ -104,9 +108,11 @@ function rebuildChartDataFromSamples() {
 }
 
 function handleMotion(event) {
-    const ax = event.accelerationIncludingGravity.x || 0;
-    const ay = event.accelerationIncludingGravity.y || 0;
-    const az = event.accelerationIncludingGravity.z || 0;
+    const g = event.accelerationIncludingGravity;
+    if (!g || (g.x === null && g.y === null && g.z === null)) return; // no sensor data in this event
+    const ax = g.x || 0;
+    const ay = g.y || 0;
+    const az = g.z || 0;
     const gx = ax / 9.80665;
     const gy = ay / 9.80665;
     const gz = az / 9.80665;
@@ -118,6 +124,12 @@ function handleMotion(event) {
     atotEl.innerText = atot.toFixed(2);
 
     if (!recording) return;
+
+    // Got real sensor data: clear the "no signal" watchdog/warning
+    if (sensorWatchdogTimer) { clearTimeout(sensorWatchdogTimer); sensorWatchdogTimer = null; }
+    sensorWarningEl.style.display = 'none';
+    recordStatusEl.textContent = `🔴 기록 중... (${samples.length + 1}개 샘플)`;
+    recordStatusEl.style.color = '#e74c3c';
 
     const t = Date.now();
     if (!sessionStart) sessionStart = t;
@@ -135,19 +147,28 @@ function handleMotion(event) {
     btnCrop.disabled = false;
     btnResetData.disabled = false;
     btnDownload.disabled = false;
+    if (btnCloudSubmit) btnCloudSubmit.disabled = false;
     updateTimeRangeDisplay();
 }
 
 async function startRecording() {
-    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+    if (!window.isSecureContext) {
+        alert('가속도 센서는 보안 연결(https://)에서만 동작합니다. 주소창이 https로 시작하는지 확인하세요.');
+        return;
+    }
+    if (typeof DeviceMotionEvent === 'undefined') {
+        alert('이 브라우저/기기에서는 가속도 센서(DeviceMotionEvent)를 지원하지 않습니다.');
+        return;
+    }
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
         try {
             const perm = await DeviceMotionEvent.requestPermission();
             if (perm !== 'granted') {
-                alert('가속도 권한이 필요합니다');
+                alert('가속도 권한이 필요합니다. 설정에서 동작 및 방향 접근 권한을 허용해주세요.');
                 return;
             }
         } catch (e) {
-            alert('가속도 권한 요청 실패');
+            alert('가속도 권한 요청 실패: ' + e.message);
             return;
         }
     }
@@ -168,15 +189,32 @@ async function startRecording() {
     btnDownload.disabled = true;
     btnCrop.disabled = true;
     btnResetData.disabled = true;
+    if (btnCloudSubmit) btnCloudSubmit.disabled = true;
+    recordStatusEl.textContent = '🔴 기록 중... (센서 신호 대기)';
+    recordStatusEl.style.color = '#e74c3c';
+    sensorWarningEl.style.display = 'none';
+
+    // Watchdog: if no sensor data arrives within 3s, warn the user with likely causes
+    if (sensorWatchdogTimer) clearTimeout(sensorWatchdogTimer);
+    sensorWatchdogTimer = setTimeout(() => {
+        if (samples.length === 0) {
+            sensorWarningEl.style.display = 'block';
+        }
+    }, 3000);
+
     updateTimeRangeDisplay();
     updateSelectionStatus();
 }
 
 function stopRecording() {
     window.removeEventListener('devicemotion', handleMotion);
+    if (sensorWatchdogTimer) { clearTimeout(sensorWatchdogTimer); sensorWatchdogTimer = null; }
     recording = false;
     btnStart.disabled = false;
     btnStop.disabled = true;
+    recordStatusEl.textContent = `⏸ 대기 중 (샘플 ${samples.length}개 기록됨)`;
+    recordStatusEl.style.color = '#666';
+    if (btnCloudSubmit) btnCloudSubmit.disabled = samples.length === 0;
 }
 
 function downloadCSV() {
@@ -280,3 +318,9 @@ accChartCanvasEl.addEventListener('click', onChartClick);
     updateTimeRangeDisplay();
     updateSelectionStatus();
 })();
+
+// Expose read-only access for the Firebase cloud-submit script (phone-accel-cloud.js)
+window.__phoneAccel = {
+    getSamples: () => samples,
+    getRange
+};
