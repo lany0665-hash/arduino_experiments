@@ -19,20 +19,9 @@ const ayEl = document.getElementById('ay');
 const azEl = document.getElementById('az');
 const atotEl = document.getElementById('atot');
 const bufferSizeEl = document.getElementById('buffer-size');
-const timelineCanvasEl = document.getElementById('timelineCanvas');
-const timelineCtx = timelineCanvasEl.getContext('2d');
+const accChartCanvasEl = document.getElementById('accChart');
 
 bufferSizeEl.innerText = MAX_SAMPLES;
-
-let timelineWidth = 0;
-const timelineHeight = 60;
-
-function resizeTimelineCanvas() {
-    const rect = timelineCanvasEl.getBoundingClientRect();
-    timelineWidth = rect.width || 600;
-    timelineCanvasEl.width = timelineWidth;
-    timelineCanvasEl.height = timelineHeight;
-}
 
 function getRange() {
     if (samples.length === 0) return { minMs: 0, maxMs: 0, rangeMs: 0 };
@@ -41,17 +30,44 @@ function getRange() {
     return { minMs, maxMs, rangeMs: maxMs - minMs };
 }
 
-// Get the chart's plot area left/right edges converted to CSS pixels,
-// so the timeline bar underneath lines up with the chart's x-axis.
-function getPlotBounds() {
-    const area = accChart.chartArea;
-    const canvasCssWidth = accChart.canvas.getBoundingClientRect().width || timelineWidth;
-    const ratio = accChart.canvas.width / canvasCssWidth || 1;
-    if (!area) return { left: 20, right: (timelineWidth || 600) - 20 };
-    return { left: area.left / ratio, right: area.right / ratio };
-}
+// Chart.js plugin: draws the selected start/end markers directly on the
+// chart's own plot area, using the x-axis scale so they line up exactly
+// with the time values on the axis.
+const selectionOverlayPlugin = {
+    id: 'selectionOverlay',
+    afterDatasetsDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea || !scales.x) return;
+        const xScale = scales.x;
 
-const ctx = document.getElementById('accChart').getContext('2d');
+        const drawLine = (ms, color) => {
+            const px = xScale.getPixelForValue(ms);
+            if (px < chartArea.left || px > chartArea.right) return;
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(px, chartArea.top);
+            ctx.lineTo(px, chartArea.bottom);
+            ctx.stroke();
+            ctx.restore();
+        };
+
+        if (cropStartMs !== null && cropEndMs !== null) {
+            const startPx = xScale.getPixelForValue(cropStartMs);
+            const endPx = xScale.getPixelForValue(cropEndMs);
+            ctx.save();
+            ctx.fillStyle = 'rgba(39, 174, 96, 0.12)';
+            ctx.fillRect(startPx, chartArea.top, endPx - startPx, chartArea.bottom - chartArea.top);
+            ctx.restore();
+        }
+
+        if (cropStartMs !== null) drawLine(cropStartMs, '#e74c3c');
+        if (cropEndMs !== null) drawLine(cropEndMs, '#27ae60');
+    }
+};
+
+const ctx = accChartCanvasEl.getContext('2d');
 const accChart = new Chart(ctx, {
     type: 'line',
     data: {
@@ -69,13 +85,14 @@ const accChart = new Chart(ctx, {
             x: { type: 'linear', title: { display: true, text: 'time (ms)' } },
             y: { suggestedMin: -2, suggestedMax: 2, title: { display: true, text: 'g' } }
         }
-    }
+    },
+    plugins: [selectionOverlayPlugin]
 });
 
 function updateTimeRangeDisplay() {
     const r = getRange();
     timeRangeSpan.innerText = `전체: ${r.rangeMs.toFixed(0)} ms`;
-    drawTimeline();
+    accChart.update('none');
 }
 
 function rebuildChartDataFromSamples() {
@@ -215,75 +232,21 @@ function updateSelectionStatus() {
         selectionStatus.style.color = '#27ae60';
         btnCrop.disabled = false;
     }
-    drawTimeline();
+    accChart.update('none');
 }
 
-function drawTimeline() {
-    resizeTimelineCanvas();
-    const bounds = getPlotBounds();
-    const padding = bounds.left;
-    const rightEdge = bounds.right;
-    const barTop = 18;
-    const barHeight = 18;
-    const r = getRange();
-
-    timelineCtx.clearRect(0, 0, timelineWidth, timelineHeight);
-    timelineCtx.fillStyle = '#f8f9fa';
-    timelineCtx.fillRect(0, 0, timelineWidth, timelineHeight);
-
-    if (samples.length === 0 || r.rangeMs === 0) {
-        timelineCtx.fillStyle = '#adb5bd';
-        timelineCtx.fillText('기록 후 타임라인이 표시됩니다', padding, 34);
-        return;
-    }
-
-    const drawWidth = rightEdge - padding;
-    timelineCtx.fillStyle = '#e8e8e8';
-    timelineCtx.fillRect(padding, barTop, drawWidth, barHeight);
-
-    if (cropStartMs !== null && cropEndMs !== null) {
-        const startPx = padding + ((cropStartMs - r.minMs) / r.rangeMs) * drawWidth;
-        const endPx = padding + ((cropEndMs - r.minMs) / r.rangeMs) * drawWidth;
-        timelineCtx.fillStyle = 'rgba(39, 174, 96, 0.3)';
-        timelineCtx.fillRect(startPx, barTop, endPx - startPx, barHeight);
-    }
-
-    if (cropStartMs !== null) {
-        const startPx = padding + ((cropStartMs - r.minMs) / r.rangeMs) * drawWidth;
-        timelineCtx.strokeStyle = '#e74c3c';
-        timelineCtx.lineWidth = 2;
-        timelineCtx.beginPath();
-        timelineCtx.moveTo(startPx, 5);
-        timelineCtx.lineTo(startPx, timelineHeight - 5);
-        timelineCtx.stroke();
-    }
-
-    if (cropEndMs !== null) {
-        const endPx = padding + ((cropEndMs - r.minMs) / r.rangeMs) * drawWidth;
-        timelineCtx.strokeStyle = '#27ae60';
-        timelineCtx.lineWidth = 2;
-        timelineCtx.beginPath();
-        timelineCtx.moveTo(endPx, 5);
-        timelineCtx.lineTo(endPx, timelineHeight - 5);
-        timelineCtx.stroke();
-    }
-
-    timelineCtx.strokeStyle = '#ddd';
-    timelineCtx.lineWidth = 1;
-    timelineCtx.strokeRect(padding, barTop, drawWidth, barHeight);
-}
-
-function onTimelineClick(event) {
+// Handle a click directly on the graph: convert the click's pixel
+// position into a time value (ms) using the chart's own x-axis scale.
+function onChartClick(event) {
     if (samples.length === 0) return;
-    const rect = timelineCanvasEl.getBoundingClientRect();
+    const rect = accChartCanvasEl.getBoundingClientRect();
     const x = event.clientX - rect.left;
-    const bounds = getPlotBounds();
-    const padding = bounds.left;
-    const drawWidth = bounds.right - bounds.left;
-    const r = getRange();
-    if (x < padding || x > padding + drawWidth || r.rangeMs === 0) return;
+    const area = accChart.chartArea;
+    if (!area || x < area.left || x > area.right) return;
 
-    const timeMs = r.minMs + ((x - padding) / drawWidth) * r.rangeMs;
+    const timeMs = accChart.scales.x.getValueForPixel(x);
+    const r = getRange();
+    if (r.rangeMs === 0) return;
 
     if (selectionMode === 0) {
         cropStartMs = timeMs;
@@ -309,14 +272,9 @@ btnStop.addEventListener('click', stopRecording);
 btnDownload.addEventListener('click', downloadCSV);
 btnCrop.addEventListener('click', cropToSelection);
 btnResetData.addEventListener('click', resetDataToOriginal);
-timelineCanvasEl.addEventListener('click', onTimelineClick);
-window.addEventListener('resize', () => {
-    resizeTimelineCanvas();
-    drawTimeline();
-});
+accChartCanvasEl.addEventListener('click', onChartClick);
 
 (function init() {
-    resizeTimelineCanvas();
     accChart.data.datasets.forEach(ds => { ds.data = []; });
     accChart.update('none');
     updateTimeRangeDisplay();

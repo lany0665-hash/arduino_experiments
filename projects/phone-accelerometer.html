@@ -14,9 +14,8 @@
         #acc-values { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0; }
         .acc-box { background:#f1f3f5; padding:8px 12px; border-radius:6px; min-width:110px; text-align:center; }
         .graph-card { background:#f8f9fa; border:1px solid #e9ecef; border-radius:8px; padding:12px; margin-top:12px; }
-        .graph-wrap { position:relative; width:100%; height:260px; }
-        .graph-wrap canvas { width:100% !important; height:100% !important; }
-        #timelineCanvas { display:block; width:100% !important; height:60px !important; cursor:pointer; }
+        .graph-wrap { position:relative; width:100%; height:280px; }
+        .graph-wrap canvas { width:100% !important; height:100% !important; cursor:crosshair; }
         .timeline-note, .notice { font-size:0.9em; color:#666; margin-top:8px; }
         .info-box { background:#f1f3f5; padding:10px 12px; border-radius:6px; margin:10px 0; font-size:0.9em; color:#444; }
     </style>
@@ -40,7 +39,7 @@
 
         <div style="background:#f1f3f5; padding:10px; border-radius:6px; margin:10px 0;">
             <h3>구간 선택</h3>
-            <p style="font-size:0.9em; color:#555; margin:8px 0;">아래 타임라인에서 시작 지점과 종료 지점을 선택하면, 해당 구간만 남깁니다.</p>
+            <p style="font-size:0.9em; color:#555; margin:8px 0;">그래프를 직접 클릭해서 시작 지점과 종료 지점을 선택하면, 해당 구간만 남깁니다.</p>
             <div class="controls">
                 <span id="selection-status" style="font-weight:bold; color:#666;">준비됨</span>
                 <span id="time-range" style="margin-left:10px; font-weight:bold;">전체: 0 ms</span>
@@ -57,12 +56,11 @@
         </div>
 
         <div class="graph-card">
-            <h3 style="margin-top:0;">실시간 그래프 + 타임라인</h3>
+            <h3 style="margin-top:0;">실시간 그래프</h3>
             <div class="graph-wrap">
                 <canvas id="accChart"></canvas>
             </div>
-            <canvas id="timelineCanvas"></canvas>
-            <p class="timeline-note">그래프 아래 타임라인 막대에서 시작점(빨강)과 종료점(초록)을 클릭하세요. x축과 정렬되어 그래프에서 바로 위치를 확인할 수 있습니다.</p>
+            <p class="timeline-note">그래프를 직접 클릭하세요: 첫 클릭은 시작 지점(빨강), 두 번째 클릭은 종료 지점(초록)입니다. 세 번째 클릭 시 선택이 초기화됩니다.</p>
         </div>
     </div>
 
