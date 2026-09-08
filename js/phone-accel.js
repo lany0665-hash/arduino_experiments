@@ -41,6 +41,16 @@ function getRange() {
     return { minMs, maxMs, rangeMs: maxMs - minMs };
 }
 
+// Get the chart's plot area left/right edges converted to CSS pixels,
+// so the timeline bar underneath lines up with the chart's x-axis.
+function getPlotBounds() {
+    const area = accChart.chartArea;
+    const canvasCssWidth = accChart.canvas.getBoundingClientRect().width || timelineWidth;
+    const ratio = accChart.canvas.width / canvasCssWidth || 1;
+    if (!area) return { left: 20, right: (timelineWidth || 600) - 20 };
+    return { left: area.left / ratio, right: area.right / ratio };
+}
+
 const ctx = document.getElementById('accChart').getContext('2d');
 const accChart = new Chart(ctx, {
     type: 'line',
@@ -210,7 +220,9 @@ function updateSelectionStatus() {
 
 function drawTimeline() {
     resizeTimelineCanvas();
-    const padding = 20;
+    const bounds = getPlotBounds();
+    const padding = bounds.left;
+    const rightEdge = bounds.right;
     const barTop = 18;
     const barHeight = 18;
     const r = getRange();
@@ -225,7 +237,7 @@ function drawTimeline() {
         return;
     }
 
-    const drawWidth = timelineWidth - padding * 2;
+    const drawWidth = rightEdge - padding;
     timelineCtx.fillStyle = '#e8e8e8';
     timelineCtx.fillRect(padding, barTop, drawWidth, barHeight);
 
@@ -265,8 +277,9 @@ function onTimelineClick(event) {
     if (samples.length === 0) return;
     const rect = timelineCanvasEl.getBoundingClientRect();
     const x = event.clientX - rect.left;
-    const padding = 20;
-    const drawWidth = timelineWidth - padding * 2;
+    const bounds = getPlotBounds();
+    const padding = bounds.left;
+    const drawWidth = bounds.right - bounds.left;
     const r = getRange();
     if (x < padding || x > padding + drawWidth || r.rangeMs === 0) return;
 
