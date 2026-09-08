@@ -15,8 +15,8 @@
         .acc-box { background:#f1f3f5; padding:8px 12px; border-radius:6px; min-width:110px; text-align:center; }
         .graph-card { background:#f8f9fa; border:1px solid #e9ecef; border-radius:8px; padding:12px; margin-top:12px; }
         .graph-wrap { position:relative; width:100%; height:260px; }
-        .graph-wrap canvas { position:absolute; left:0; top:0; width:100% !important; height:100% !important; }
-        #timelineCanvas { pointer-events:auto; }
+        .graph-wrap canvas { width:100% !important; height:100% !important; }
+        #timelineCanvas { display:block; width:100% !important; height:60px !important; cursor:pointer; }
         .timeline-note, .notice { font-size:0.9em; color:#666; margin-top:8px; }
         .info-box { background:#f1f3f5; padding:10px 12px; border-radius:6px; margin:10px 0; font-size:0.9em; color:#444; }
     </style>
@@ -60,9 +60,9 @@
             <h3 style="margin-top:0;">실시간 그래프 + 타임라인</h3>
             <div class="graph-wrap">
                 <canvas id="accChart"></canvas>
-                <canvas id="timelineCanvas"></canvas>
             </div>
-            <p class="timeline-note">아래 막대에서 시작점(빨강)과 종료점(초록)을 클릭하세요. 선택 구간이 그래프에 함께 표시됩니다.</p>
+            <canvas id="timelineCanvas"></canvas>
+            <p class="timeline-note">그래프 아래 타임라인 막대에서 시작점(빨강)과 종료점(초록)을 클릭하세요. x축과 정렬되어 그래프에서 바로 위치를 확인할 수 있습니다.</p>
         </div>
     </div>
 
