@@ -6,22 +6,30 @@
     <title>스마트폰 가속도 실험</title>
     <link rel="stylesheet" href="../css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js" defer></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 16px; background:#f8f9fa; }
-        .container { max-width: 900px; margin: 0 auto; background:#fff; padding:16px; border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,0.08); }
+        .container { max-width: 980px; margin: 0 auto; background:#fff; padding:16px; border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,0.08); }
         .controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
         button { padding:10px 14px; border-radius:6px; border:none; background:#007bff; color:#fff; }
         #acc-values { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0; }
         .acc-box { background:#f1f3f5; padding:8px 12px; border-radius:6px; min-width:110px; text-align:center; }
-        canvas { width:100% !important; height:220px !important; }
-        .notice { font-size:0.9em; color:#666; margin-top:8px; }
+        .graph-card { background:#f8f9fa; border:1px solid #e9ecef; border-radius:8px; padding:12px; margin-top:12px; }
+        .graph-wrap { position:relative; width:100%; height:260px; }
+        .graph-wrap canvas { position:absolute; left:0; top:0; width:100% !important; height:100% !important; }
+        #timelineCanvas { pointer-events:auto; }
+        .timeline-note, .notice { font-size:0.9em; color:#666; margin-top:8px; }
+        .info-box { background:#f1f3f5; padding:10px 12px; border-radius:6px; margin:10px 0; font-size:0.9em; color:#444; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>스마트폰 가속도 센서 실험</h1>
-        <p class="notice">모바일 기기에서 이 페이지를 열고 '시작'을 눌러 가속도 데이터를 실시간으로 확인하세요. iOS에서는 권한 요청이 필요합니다.</p>
+        <p class="notice">모바일 기기에서 '시작'을 눌러 데이터를 기록하세요. iOS에서는 권한 요청이 필요합니다.</p>
+
+        <div class="info-box">
+            <strong>학생:</strong> 본인 기기에서 기록 후 CSV를 내려받아 확인합니다.<br>
+            <strong>교사:</strong> 학생이 제출한 CSV 파일로 개별 결과를 확인합니다.
+        </div>
 
         <div class="controls">
             <button id="btn-start">시작</button>
@@ -32,9 +40,7 @@
 
         <div style="background:#f1f3f5; padding:10px; border-radius:6px; margin:10px 0;">
             <h3>구간 선택</h3>
-            <p style="font-size:0.9em; color:#555; margin:8px 0;">
-                그래프를 클릭해서 <strong style="color:#e74c3c;">시작 지점</strong>을 선택한 후, <strong style="color:#2ecc71;">종료 지점</strong>을 선택하세요.
-            </p>
+            <p style="font-size:0.9em; color:#555; margin:8px 0;">아래 타임라인에서 시작 지점과 종료 지점을 선택하면, 해당 구간만 남깁니다.</p>
             <div class="controls">
                 <span id="selection-status" style="font-weight:bold; color:#666;">준비됨</span>
                 <span id="time-range" style="margin-left:10px; font-weight:bold;">전체: 0 ms</span>
@@ -50,14 +56,14 @@
             <div class="acc-box">|a|: <span id="atot">0.00</span> g</div>
         </div>
 
-        <h3>실시간 그래프</h3>
-        <canvas id="accChart"></canvas>
-        
-        <h3 style="margin-top:20px;">타임라인 선택</h3>
-        <canvas id="timelineCanvas" style="border: 1px solid #ddd; cursor: pointer; width:100% !important; height:50px !important;"></canvas>
-        <p style="font-size:0.85em; color:#666; margin-top:5px;">
-            시작 지점을 클릭한 후 종료 지점을 클릭하세요. 선택된 범위가 그래프에도 표시됩니다.
-        </p>
+        <div class="graph-card">
+            <h3 style="margin-top:0;">실시간 그래프 + 타임라인</h3>
+            <div class="graph-wrap">
+                <canvas id="accChart"></canvas>
+                <canvas id="timelineCanvas"></canvas>
+            </div>
+            <p class="timeline-note">아래 막대에서 시작점(빨강)과 종료점(초록)을 클릭하세요. 선택 구간이 그래프에 함께 표시됩니다.</p>
+        </div>
     </div>
 
     <script src="../js/phone-accel.js" defer></script>
