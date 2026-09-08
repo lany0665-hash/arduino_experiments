@@ -34,6 +34,20 @@ function getRange() {
     return { minMs, maxMs, rangeMs: maxMs - minMs };
 }
 
+function getNearestSample(sampleList, timeMs) {
+    if (!sampleList || sampleList.length === 0) return null;
+    let nearest = sampleList[0];
+    let minDiff = Math.abs(sampleList[0].rel - timeMs);
+    for (let i = 1; i < sampleList.length; i++) {
+        const diff = Math.abs(sampleList[i].rel - timeMs);
+        if (diff < minDiff) {
+            minDiff = diff;
+            nearest = sampleList[i];
+        }
+    }
+    return nearest;
+}
+
 // Chart.js plugin: draws the selected start/end markers directly on the
 // chart's own plot area, using the x-axis scale so they line up exactly
 // with the time values on the axis.
@@ -235,7 +249,19 @@ function cropToSelection() {
     if (cropStartMs === null || cropEndMs === null) return alert('시작 지점과 종료 지점을 모두 선택하세요.');
     if (cropStartMs >= cropEndMs) return alert('유효한 시간 범위를 선택하세요. (시작 < 종료)');
     if (!originalSamples) originalSamples = samples.slice();
-    const filtered = originalSamples.filter(s => s.rel >= cropStartMs && s.rel <= cropEndMs);
+    const source = originalSamples;
+    let filtered = source.filter(s => s.rel >= cropStartMs && s.rel <= cropEndMs);
+    if (filtered.length === 0) {
+        const startNearest = getNearestSample(source, cropStartMs);
+        const endNearest = getNearestSample(source, cropEndMs);
+        if (startNearest && endNearest) {
+            const startIdx = source.indexOf(startNearest);
+            const endIdx = source.indexOf(endNearest);
+            const from = Math.min(startIdx, endIdx);
+            const to = Math.max(startIdx, endIdx);
+            filtered = source.slice(from, to + 1);
+        }
+    }
     if (filtered.length === 0) return alert('선택된 구간에 데이터가 없습니다.');
     samples = filtered;
     rebuildChartDataFromSamples();
@@ -276,14 +302,25 @@ function updateSelectionStatus() {
 // position into a time value (ms) using the chart's own x-axis scale.
 function onChartClick(event) {
     if (samples.length === 0) return;
-    const rect = accChartCanvasEl.getBoundingClientRect();
-    const x = event.clientX - rect.left;
+    let x = null;
+    if (Chart.helpers && typeof Chart.helpers.getRelativePosition === 'function') {
+        const pos = Chart.helpers.getRelativePosition(event, accChart);
+        x = pos.x;
+    } else {
+        const rect = accChartCanvasEl.getBoundingClientRect();
+        const scaleX = accChartCanvasEl.width / rect.width;
+        x = (event.clientX - rect.left) * scaleX;
+    }
     const area = accChart.chartArea;
     if (!area || x < area.left || x > area.right) return;
 
-    const timeMs = accChart.scales.x.getValueForPixel(x);
+    const rawTimeMs = accChart.scales.x.getValueForPixel(x);
     const r = getRange();
     if (r.rangeMs === 0) return;
+    const clampedTimeMs = Math.min(r.maxMs, Math.max(r.minMs, rawTimeMs));
+    const nearest = getNearestSample(samples, clampedTimeMs);
+    if (!nearest) return;
+    const timeMs = nearest.rel;
 
     if (selectionMode === 0) {
         cropStartMs = timeMs;
