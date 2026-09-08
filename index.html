@@ -6,9 +6,133 @@
     <meta name="description" content="Arduino 웹 실험실 - 가속도계, 환경 센서, 자유낙하 실험">
     <title>아두이노 웹 실험실</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        .auth-bar {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .user-status {
+            font-size: 1.05em;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .role-badge {
+            font-size: 0.8em;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: bold;
+        }
+        .role-teacher {
+            background-color: #28a745;
+            color: white;
+        }
+        .role-student {
+            background-color: #17a2b8;
+            color: white;
+        }
+        .auth-btn {
+            padding: 8px 16px;
+            font-size: 0.95em;
+            font-weight: 600;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .btn-google {
+            background-color: #4285F4;
+            color: white;
+        }
+        .btn-google:hover {
+            background-color: #357ae8;
+        }
+        .btn-logout {
+            background-color: #dc3545;
+            color: white;
+        }
+        .btn-logout:hover {
+            background-color: #c82333;
+        }
+        .btn-mode {
+            background-color: #6f42c1;
+            color: white;
+            margin-right: 4px;
+        }
+        .btn-mode:hover {
+            background-color: #59359a;
+        }
+        .records-section {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .records-section h3 {
+            margin-top: 0;
+            color: #007BFF;
+        }
+        .experiment-list {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0 0 0;
+        }
+        .experiment-item {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 14px 18px;
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .experiment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f1f3f5;
+            padding-bottom: 8px;
+        }
+        .student-info {
+            font-size: 0.9em;
+            color: #495057;
+        }
+        .exp-details {
+            font-size: 0.9em;
+            color: #6c757d;
+            background: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-top: 4px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
+        <!-- 구글 로그인 및 사용자 인증 상태 바 -->
+        <div class="auth-bar">
+            <div id="userInfo" class="user-status">🔒 구글 로그인이 필요합니다</div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button id="modeToggleBtn" class="auth-btn btn-mode" onclick="toggleViewMode()" style="display:none;">🎓 학생용 모드로 전환</button>
+                <button id="signInBtn" class="auth-btn btn-google" onclick="signInWithGoogle()">Sign in with Google</button>
+                <button id="signOutBtn" class="auth-btn btn-logout" onclick="signOut()" style="display:none;">Sign out</button>
+            </div>
+        </div>
+
         <h1>아두이노 웹 실험실</h1>
         <p>환영합니다! 아래에서 수행할 실험 프로젝트를 선택하세요.</p>
         <p>프로젝트를 시작하기 전에, <a href="uploader.html">펌웨어 업로더</a> 페이지에서 아두이노를 먼저 준비해주세요.</p>
@@ -20,6 +144,234 @@
             <li><a href="projects/free-fall.html">➡️ 자유낙하 궤적 분석 (스마트폰 영상)</a></li>
             <li><a href="projects/phone-accelerometer.html">➡️ 스마트폰 가속도 센서 실험</a></li>
         </ul>
+
+        <!-- 학생 및 교사 실험 데이터 기록 영역 -->
+        <div id="studentRecordsSection" class="records-section">
+            <h3 id="recordsTitle">🧪 실험 데이터 저장 & 조회</h3>
+            <p id="recordsNotice">구글 로그인 시 작성된 실험 기록을 저장하고 조회할 수 있습니다.</p>
+            <div id="experimentsList" style="display:none;"></div>
+        </div>
     </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            projectId: "web-experiment-f9b24",
+            appId: "1:718758606428:web:e11ed8d0b64a471ee65899",
+            storageBucket: "web-experiment-f9b24.firebasestorage.app",
+            apiKey: "AIzaSyCYVme6ZP-iyspRmHTtuUSsKXe7K_D0vJQ",
+            authDomain: "web-experiment-f9b24.firebaseapp.com",
+            messagingSenderId: "718758606428"
+        };
+
+        let auth = null;
+        let db = null;
+        let currentUser = null;
+        let isTeacherUser = false;
+        let currentViewMode = 'teacher'; // 'teacher' or 'student'
+
+        function initFirebase() {
+            try {
+                if (typeof firebase === 'undefined') return;
+                firebase.initializeApp(firebaseConfig);
+                auth = firebase.auth();
+                db = firebase.firestore();
+
+                auth.onAuthStateChanged(async user => {
+                    currentUser = user;
+                    if (user) {
+                        isTeacherUser = await checkIsTeacher(user.uid);
+                        const savedMode = sessionStorage.getItem('viewMode');
+                        if (savedMode && (savedMode === 'teacher' || savedMode === 'student')) {
+                            currentViewMode = savedMode;
+                        } else {
+                            currentViewMode = isTeacherUser ? 'teacher' : 'student';
+                        }
+                        updateUIForUser();
+                    } else {
+                        isTeacherUser = false;
+                        currentViewMode = 'student';
+                        updateUIForUser();
+                    }
+                });
+            } catch (e) {
+                console.error('Firebase init error:', e);
+            }
+        }
+
+        function updateUIForUser() {
+            const userInfo = document.getElementById('userInfo');
+            const signInBtn = document.getElementById('signInBtn');
+            const signOutBtn = document.getElementById('signOutBtn');
+            const modeToggleBtn = document.getElementById('modeToggleBtn');
+            const expList = document.getElementById('experimentsList');
+            const notice = document.getElementById('recordsNotice');
+            const title = document.getElementById('recordsTitle');
+
+            if (currentUser) {
+                signInBtn.style.display = 'none';
+                signOutBtn.style.display = 'inline-block';
+
+                if (isTeacherUser) {
+                    modeToggleBtn.style.display = 'inline-block';
+                    if (currentViewMode === 'teacher') {
+                        modeToggleBtn.textContent = '🎓 학생용 모드로 전환';
+                        const roleBadge = '<span class="role-badge role-teacher">👨‍🏫 교사 (교사용 모드)</span>';
+                        userInfo.innerHTML = `👤 ${currentUser.displayName || currentUser.email} ${roleBadge}`;
+                        title.textContent = '📋 교사 대시보드 - 전체 학생 제출 현황';
+                        notice.textContent = '모든 학생이 제출한 실험 데이터 목록입니다:';
+                        loadTeacherDashboard();
+                    } else {
+                        modeToggleBtn.textContent = '👨‍🏫 교사용 모드로 전환';
+                        const roleBadge = '<span class="role-badge role-student">👨‍🏫 교사 (학생용 모드 체험)</span>';
+                        userInfo.innerHTML = `👤 ${currentUser.displayName || currentUser.email} ${roleBadge}`;
+                        title.textContent = '🧪 내 실험 기록 관리 (학생용 화면)';
+                        notice.textContent = '내가 저장한 실험 기록 목록입니다 (학생용 화면 미리보기):';
+                        loadStudentExperiments();
+                    }
+                } else {
+                    modeToggleBtn.style.display = 'none';
+                    const roleBadge = '<span class="role-badge role-student">🎓 학생</span>';
+                    userInfo.innerHTML = `👤 ${currentUser.displayName || currentUser.email} ${roleBadge}`;
+                    title.textContent = '🧪 내 실험 기록 관리';
+                    notice.textContent = '내가 저장한 실험 기록 목록입니다:';
+                    loadStudentExperiments();
+                }
+            } else {
+                modeToggleBtn.style.display = 'none';
+                userInfo.textContent = '🔒 구글 로그인이 필요합니다';
+                signInBtn.style.display = 'inline-block';
+                signOutBtn.style.display = 'none';
+                if (expList) expList.style.display = 'none';
+                title.textContent = '🧪 실험 데이터 저장 & 조회';
+                notice.textContent = '구글 로그인 시 작성된 실험 기록을 저장하고 조회할 수 있습니다.';
+            }
+        }
+
+        function toggleViewMode() {
+            if (!isTeacherUser) return;
+            currentViewMode = (currentViewMode === 'teacher') ? 'student' : 'teacher';
+            sessionStorage.setItem('viewMode', currentViewMode);
+            updateUIForUser();
+        }
+
+        async function checkIsTeacher(uid) {
+            if (currentUser && currentUser.email === 'lany0665@gmail.com') {
+                return true;
+            }
+            try {
+                const doc = await db.collection('roles').doc(uid).get();
+                return doc.exists && doc.data().isTeacher === true;
+            } catch (e) {
+                return currentUser && currentUser.email === 'lany0665@gmail.com';
+            }
+        }
+
+        function signInWithGoogle() {
+            if (!auth) return alert('Firebase 초기화 오류');
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider).catch(err => alert('로그인 실패: ' + err.message));
+        }
+
+        function signOut() {
+            if (!auth) return;
+            auth.signOut();
+        }
+
+        async function loadStudentExperiments() {
+            const expList = document.getElementById('experimentsList');
+            if (!auth || !currentUser || !expList) return;
+            expList.style.display = 'block';
+            expList.innerHTML = '<p style="color:#6c757d;">내 실험 기록을 불러오는 중...</p>';
+
+            try {
+                const snap = await db.collection('experiments')
+                    .where('userId', '==', currentUser.uid)
+                    .get();
+
+                if (snap.empty) {
+                    expList.innerHTML = '<p style="color:#6c757d;">아직 저장된 실험 기록이 없습니다. 실험 페이지에서 데이터를 저장해보세요!</p>';
+                    return;
+                }
+
+                renderExperiments(snap, false);
+            } catch (e) {
+                console.error('Load experiments error:', e);
+                expList.innerHTML = '<p style="color:#dc3545;">실험 기록 불러오기 실패: ' + e.message + '</p>';
+            }
+        }
+
+        async function loadTeacherDashboard() {
+            const expList = document.getElementById('experimentsList');
+            if (!auth || !currentUser || !expList) return;
+            expList.style.display = 'block';
+            expList.innerHTML = '<p style="color:#6c757d;">전체 학생의 제출 데이터를 불러오는 중...</p>';
+
+            try {
+                const snap = await db.collection('experiments').get();
+
+                if (snap.empty) {
+                    expList.innerHTML = '<p style="color:#6c757d;">제출된 학생 실험 기록이 없습니다.</p>';
+                    return;
+                }
+
+                renderExperiments(snap, true);
+            } catch (e) {
+                console.error('Teacher dashboard load error:', e);
+                expList.innerHTML = '<p style="color:#dc3545;">학생 기록 불러오기 실패: ' + e.message + '</p>';
+            }
+        }
+
+        function renderExperiments(snap, isTeacher) {
+            const expList = document.getElementById('experimentsList');
+            let html = '<ul class="experiment-list">';
+            
+            const docs = [];
+            snap.forEach(doc => docs.push(doc.data()));
+            docs.sort((a, b) => {
+                const ta = a.timestamp && a.timestamp.toDate ? a.timestamp.toDate().getTime() : 0;
+                const tb = b.timestamp && b.timestamp.toDate ? b.timestamp.toDate().getTime() : 0;
+                return tb - ta;
+            });
+
+            docs.forEach(data => {
+                const dateStr = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate().toLocaleString('ko-KR') : '방금 전';
+                const expName = data.experimentName || data.tab || '아두이노 실험';
+                const studentLabel = isTeacher ? `<span class="student-info">👤 <strong>${data.userEmail || data.userId}</strong></span>` : '';
+                
+                let detailSummary = '';
+                if (data.dataSummary) {
+                    detailSummary = `📊 요약: ${data.dataSummary}`;
+                } else if (data.trialsCount !== undefined) {
+                    detailSummary = `📊 회차 수: ${data.trialsCount}회`;
+                } else {
+                    detailSummary = '📊 저장 완료됨';
+                }
+
+                html += `
+                    <li class="experiment-item">
+                        <div class="experiment-header">
+                            <div>
+                                <strong style="font-size:1.05em; color:#007BFF;">${expName}</strong>
+                                ${studentLabel}
+                            </div>
+                            <span style="font-size:0.85em; color:#6c757d;">🕒 ${dateStr}</span>
+                        </div>
+                        <div class="exp-details">
+                            ${detailSummary}
+                        </div>
+                    </li>
+                `;
+            });
+            html += '</ul>';
+            expList.innerHTML = html;
+        }
+
+        window.addEventListener('DOMContentLoaded', initFirebase);
+    </script>
 </body>
 </html>
